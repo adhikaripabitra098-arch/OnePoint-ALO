@@ -1,0 +1,9 @@
+{
+  "name": "OnePoint - The Autonomous Life OS",
+  "description": "AI-native Personal Autonomy Engine that proactively runs your life. Automated tasks, negotiations, and real-world execution.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
