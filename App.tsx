@@ -12,6 +12,7 @@ import { storageService } from './services/storageService';
 
 export default function App() {
   const [appState, setAppState] = useState<'ONBOARDING' | 'AUTH' | 'MAIN'>('ONBOARDING');
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('REGISTER');
   const [currentScreen, setCurrentScreen] = useState('home');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   
@@ -50,8 +51,9 @@ export default function App() {
 
   // --- Handlers ---
 
-  const handleOnboardingComplete = (prefs: UserPreferences) => {
+  const handleOnboardingComplete = (prefs: UserPreferences, mode: 'LOGIN' | 'REGISTER' = 'REGISTER') => {
     setTempOnboardingPrefs(prefs); // Hold these in memory
+    setAuthMode(mode);
     setAppState('AUTH');
   };
 
@@ -134,6 +136,7 @@ export default function App() {
   if (appState === 'AUTH') {
     return (
       <AuthScreen 
+        initialMode={authMode}
         onComplete={handleAuthComplete} 
         onRegister={handleRegister}
         onLogin={handleLogin}

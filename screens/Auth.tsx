@@ -5,14 +5,18 @@ import { Mail, User as UserIcon, Lock, ArrowRight, AlertCircle, ScanFace, Info, 
 import { authenticateBiometrics } from '../services/biometricService';
 
 interface AuthProps {
+  initialMode?: 'LOGIN' | 'REGISTER';
   onComplete: (user: User) => void;
   onRegister: (email: string, pass: string, name: string) => Promise<boolean>;
   onLogin: (email: string, pass: string) => Promise<User | null>;
   onBack: () => void;
 }
 
-export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogin, onBack }) => {
-  const [isRegister, setIsRegister] = useState(true);
+// Standard W3C Email Regex
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onComplete, onRegister, onLogin, onBack }) => {
+  const [isRegister, setIsRegister] = useState(initialMode === 'REGISTER');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,6 +49,11 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
       const cleanEmail = email.trim();
       const cleanName = name.trim();
 
+      // Email Validation
+      if (!EMAIL_REGEX.test(cleanEmail)) {
+        throw new Error("Please enter a valid email address.");
+      }
+
       // Simulate network delay
       await new Promise(r => setTimeout(r, 600));
 
@@ -72,6 +81,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
         }
       }
     } catch (err: any) {
+      if (navigator.vibrate) navigator.vibrate(50);
       setError(err.message || "Authentication failed");
     } finally {
       setIsLoading(false);
@@ -96,6 +106,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
        const user = email ? await onLogin(email, 'mock_pass_bypass') : null;
        onComplete(user || { name: 'User', email: email || 'user@onepoint.ai' });
     } else {
+      if (navigator.vibrate) navigator.vibrate(50);
       if (result.error === 'not_setup') {
         setError("Face ID not set up. Please log in with password first.");
       } else if (result.error === 'no_match') {
@@ -116,7 +127,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
       return;
     }
 
-    if (!email.includes('@')) {
+    if (!EMAIL_REGEX.test(email)) {
       setError("Please enter a valid email address.");
       return;
     }
@@ -284,25 +295,23 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
         </div>
         
         <div className="mt-8 text-center pb-8">
-          <p className="text-sm text-textMuted font-medium">
-            {isRegister ? "Already have an account?" : "Don't have an account?"}
-            <button 
-              onClick={toggleMode}
-              className="ml-2 text-white font-bold hover:underline tracking-wide"
-            >
-              {isRegister ? "Log In" : "Register"}
-            </button>
-          </p>
+          {!isRegister && (
+            <p className="text-sm text-textMuted font-medium">
+              Don't have an account?
+              <button 
+                onClick={toggleMode}
+                className="ml-2 text-white font-bold hover:underline tracking-wide"
+              >
+                Register
+              </button>
+            </p>
+          )}
         </div>
 
       </div>
 
       {/* 
           LEGAL DOCUMENT VIEWER (MODAL)
-          Changes:
-          1. EULA Clause (Mandatory for Apple)
-          2. AI Disclaimer (Mandatory for Liability)
-          3. Contact info (Mandatory for Publishing)
       */}
       {showLegal && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center animate-in fade-in duration-200">

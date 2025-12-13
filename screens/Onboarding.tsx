@@ -1,19 +1,26 @@
 import React, { useState } from 'react';
 import { Screen, Button, BackButton } from '../components/UI';
-import { ArrowRight, Check, Shield, Zap, Lock, Smartphone } from 'lucide-react';
+import { ArrowRight, Check, Shield, Zap, Lock, Smartphone, Camera, MapPin, Bell } from 'lucide-react';
 import { NegotiationStyle, UserPreferences } from '../types';
 
 interface OnboardingProps {
-  onComplete: (prefs: UserPreferences) => void;
+  onComplete: (prefs: UserPreferences, mode: 'LOGIN' | 'REGISTER') => void;
 }
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-  const [step, setStep] = useState(0); // 0: Splash, 1: Limits, 2: Negotiation
+  const [step, setStep] = useState(0); // 0: Splash, 1: Limits, 2: Negotiation, 3: Permissions
   const [prefs, setPrefs] = useState<UserPreferences>({
     maxSpendingThreshold: 100,
     autoApproveUnder: 25,
     negotiationStyle: NegotiationStyle.NEUTRAL,
     currency: 'USD'
+  });
+
+  // Permission State
+  const [permissions, setPermissions] = useState({
+    notifications: false,
+    location: false,
+    camera: false
   });
 
   // Local state strings to manage input without leading zero issues
@@ -34,9 +41,70 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     setPrefs({ ...prefs, autoApproveUnder: Number(cleaned) });
   };
 
-  const nextStep = () => setStep(s => s + 1);
-  const prevStep = () => setStep(s => Math.max(0, s - 1));
-  const skipToAuth = () => onComplete(prefs); 
+  const nextStep = () => {
+    if (navigator.vibrate) navigator.vibrate(10);
+    setStep(s => s + 1);
+  };
+
+  const prevStep = () => {
+    if (navigator.vibrate) navigator.vibrate(10);
+    setStep(s => Math.max(0, s - 1));
+  };
+  
+  const finishSetup = (mode: 'LOGIN' | 'REGISTER' = 'REGISTER') => {
+    if (navigator.vibrate) navigator.vibrate([10, 30, 10]);
+    onComplete(prefs, mode); 
+  };
+
+  // This function triggers the ACTUAL native browser permission dialogs
+  const requestPermission = async (type: 'notifications' | 'location' | 'camera') => {
+    if (navigator.vibrate) navigator.vibrate(5);
+    
+    switch (type) {
+        case 'notifications':
+            // iOS requires this to be a direct result of user interaction
+            if ('Notification' in window) {
+                try {
+                  const permission = await Notification.requestPermission();
+                  if (permission === 'granted') {
+                    setPermissions(p => ({...p, notifications: true}));
+                  } else if (permission === 'denied') {
+                    alert('Notifications are blocked. Please enable them in your device settings.');
+                  }
+                } catch (e) {
+                  console.error("Notification Error:", e);
+                }
+            }
+            break;
+            
+        case 'location':
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    () => setPermissions(p => ({...p, location: true})),
+                    (err) => {
+                      console.log('Location denied', err);
+                      if (err.code === 1) alert('Location access denied. Please enable it in settings.');
+                    }
+                );
+            }
+            break;
+            
+        case 'camera':
+             try {
+                // This triggers the native "Allow Camera" dialog
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                setPermissions(p => ({...p, camera: true}));
+                
+                // IMPORTANT: Stop the camera immediately so the green light goes off
+                // We only wanted the permission, not the stream yet
+                stream.getTracks().forEach(track => track.stop());
+             } catch(e) {
+                 console.log("Camera denied");
+                 alert('Camera access is required for receipts. Please allow access.');
+             }
+             break;
+    }
+  };
 
   // --- Step 0: Splash ---
   if (step === 0) {
@@ -56,14 +124,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                <span className="text-white block">OnePoint</span>
                <span className="text-white/40 text-[28px] font-semibold block mt-1 tracking-normal">Autonomous Life OS</span>
              </h1>
-             <p className="text-center text-textMuted font-bold text-[16px] tracking-wide max-w-[260px] leading-relaxed">
-               The engine that runs your life so you don't have to.
-             </p>
           </div>
 
           <div className="flex flex-col w-full gap-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
             
-            {/* Trust Badges - Updated to be legally accurate */}
+            {/* Trust Badges */}
             <div className="flex justify-center gap-6 opacity-60">
               <div className="flex items-center gap-1.5">
                 <Lock size={12} className="text-white" />
@@ -77,9 +142,12 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
             <div className="w-full space-y-4">
               <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Get Started</Button>
-              {/* Updated: Font matching Get Started (16px, bold, tracking-wide) */}
-              <button onClick={skipToAuth} className="w-full h-[56px] flex items-center justify-center font-bold text-[16px] text-white/30 hover:text-white transition-colors tracking-wide">
-                Skip Intro
+              
+              <button 
+                onClick={() => finishSetup('LOGIN')}
+                className="w-full h-[56px] flex items-center justify-center text-[16px] text-white/60 font-medium transition-colors tracking-wide group"
+              >
+                Have an account? <span className="text-white font-bold ml-2">Log In</span>
               </button>
             </div>
           </div>
@@ -92,21 +160,25 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   if (step === 1) {
     return (
       <Screen>
+         <div className="absolute top-6 left-2 z-50">
+          <BackButton onClick={prevStep} />
+        </div>
+
         <div className="mt-20 mb-8 animate-slide-up">
            <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
-           <p className="text-textMuted text-lg leading-relaxed font-medium">
-             OnePoint needs your permission to spend. You're always in control.
+           <p className="text-white/60 text-lg leading-relaxed font-medium">
+             Define the autonomy level for your AI agent. You retain full control.
            </p>
         </div>
 
         <div className="space-y-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
           {/* Card 1: Max Limit */}
-          <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl">
+          <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
             <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
                <Shield size={60} />
             </div>
             <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
-            <p className="text-sm text-textMuted mb-6 font-medium">Transactions above this require your Face ID.</p>
+            <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
             <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
               <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
               <input 
@@ -120,12 +192,12 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           </div>
 
           {/* Card 2: Auto Approve */}
-          <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl">
+          <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
             <div className="absolute right-0 top-0 p-4 opacity-10">
                <Zap size={60} />
             </div>
             <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
-            <p className="text-sm text-textMuted mb-6 font-medium">Small tasks handled instantly.</p>
+            <p className="text-sm text-white/60 mb-6 font-medium">Small tasks handled instantly.</p>
             <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
               <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
               <input 
@@ -147,51 +219,144 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   }
 
   // --- Step 2: Negotiation ---
+  if (step === 2) {
+      return (
+        <Screen>
+          <div className="absolute top-6 left-2 z-50">
+            <BackButton onClick={prevStep} />
+          </div>
+
+          <div className="mt-20 mb-6 animate-slide-up">
+              <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
+              <p className="text-white/60 text-lg leading-relaxed font-medium">
+                How should OnePoint communicate with third parties on your behalf?
+              </p>
+          </div>
+
+          <div className="space-y-4 animate-slide-up overflow-y-auto max-h-[55vh] pb-24 pr-1" style={{ animationDelay: '0.1s', scrollbarWidth: 'none' }}>
+            {Object.values(NegotiationStyle).map((style) => {
+              const isSelected = prefs.negotiationStyle === style;
+              return (
+                <div 
+                  key={style}
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(5);
+                    setPrefs({...prefs, negotiationStyle: style});
+                  }}
+                  className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 border ${isSelected ? 'bg-white text-black border-white shadow-glow transform scale-[1.02]' : 'bg-[#121212] border-white/5 hover:bg-[#202020] text-white'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold capitalize text-xl mb-1">{style.toLowerCase()}</h3>
+                      <p className={`text-sm font-medium ${isSelected ? 'text-gray-600' : 'text-white/60'}`}>
+                        {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
+                        {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
+                        {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
+                        {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
+                      </p>
+                    </div>
+                    {isSelected && (
+                      <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
+                        <Check size={16} className="text-white stroke-[3]" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="absolute bottom-10 left-0 right-0 px-6">
+            <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Next</Button>
+          </div>
+        </Screen>
+      );
+  }
+
+  // --- Step 3: Permissions (Real Browser APIs) ---
   return (
     <Screen>
       <div className="absolute top-6 left-2 z-50">
         <BackButton onClick={prevStep} />
       </div>
 
-      <div className="mt-20 mb-6 animate-slide-up">
-          <h1 className="text-3xl font-bold mb-2">Negotiation Mode</h1>
-          <p className="text-textMuted text-lg leading-relaxed font-medium">
-            How should your AI agent behave when dealing with support?
+      <div className="mt-20 mb-8 animate-slide-up">
+          <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
+          <p className="text-white/60 text-lg leading-relaxed font-medium">
+            Grant OnePoint access to your device hardware to enable autonomous features.
           </p>
       </div>
 
-      <div className="space-y-4 animate-slide-up overflow-y-auto max-h-[55vh] pb-24 pr-1" style={{ animationDelay: '0.1s', scrollbarWidth: 'none' }}>
-        {Object.values(NegotiationStyle).map((style) => {
-          const isSelected = prefs.negotiationStyle === style;
-          return (
-            <div 
-              key={style}
-              onClick={() => setPrefs({...prefs, negotiationStyle: style})}
-              className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 border ${isSelected ? 'bg-white text-black border-white shadow-glow transform scale-[1.02]' : 'bg-[#121212] border-white/5 hover:bg-[#202020] text-white'}`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold capitalize text-xl mb-1">{style.toLowerCase()}</h3>
-                  <p className={`text-sm font-medium ${isSelected ? 'text-gray-600' : 'text-textMuted'}`}>
-                    {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
-                    {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
-                    {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
-                    {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
-                  </p>
-                </div>
-                {isSelected && (
-                  <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
-                    <Check size={16} className="text-white stroke-[3]" />
+      <div className="space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          
+          {/* Notifications */}
+          <div className="p-4 rounded-[24px] bg-[#121212] border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                      <Bell size={20} className={permissions.notifications ? "text-green-400" : "text-white"} />
                   </div>
-                )}
+                  <div>
+                      <h3 className="font-bold text-white">Notifications</h3>
+                      <p className="text-xs text-white/60 font-medium">Critical alerts & approvals</p>
+                  </div>
               </div>
-            </div>
-          );
-        })}
+              <button 
+                  onClick={() => requestPermission('notifications')}
+                  disabled={permissions.notifications}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${permissions.notifications ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
+              >
+                  {permissions.notifications ? 'Allowed' : 'Allow'}
+              </button>
+          </div>
+
+          {/* Location */}
+          <div className="p-4 rounded-[24px] bg-[#121212] border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                      <MapPin size={20} className={permissions.location ? "text-green-400" : "text-white"} />
+                  </div>
+                  <div>
+                      <h3 className="font-bold text-white">Location</h3>
+                      <p className="text-xs text-white/60 font-medium">Automated pickups & services</p>
+                  </div>
+              </div>
+              <button 
+                  onClick={() => requestPermission('location')}
+                  disabled={permissions.location}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${permissions.location ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
+              >
+                  {permissions.location ? 'Allowed' : 'Allow'}
+              </button>
+          </div>
+
+          {/* Camera */}
+          <div className="p-4 rounded-[24px] bg-[#121212] border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                      <Camera size={20} className={permissions.camera ? "text-green-400" : "text-white"} />
+                  </div>
+                  <div>
+                      <h3 className="font-bold text-white">Camera</h3>
+                      <p className="text-xs text-white/60 font-medium">Receipt scanning & vision</p>
+                  </div>
+              </div>
+              <button 
+                  onClick={() => requestPermission('camera')}
+                  disabled={permissions.camera}
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${permissions.camera ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
+              >
+                  {permissions.camera ? 'Allowed' : 'Allow'}
+              </button>
+          </div>
+
+          <p className="text-xs text-center text-white/30 pt-4 px-6 font-medium">
+             You can modify these permissions later in your device settings.
+          </p>
+
       </div>
 
       <div className="absolute bottom-10 left-0 right-0 px-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
-        <Button onClick={() => onComplete(prefs)} fullWidth variant="primary" icon={Check}>Finish Setup</Button>
+        <Button onClick={() => finishSetup()} fullWidth variant="primary" icon={Check}>Finish Setup</Button>
       </div>
     </Screen>
   );
