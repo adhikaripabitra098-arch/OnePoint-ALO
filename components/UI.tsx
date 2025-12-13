@@ -108,10 +108,7 @@ export const Input: React.FC<InputProps> = ({ label, leftIcon, rightIcon, onRigh
 
 // --- Screen Container ---
 export const Screen: React.FC<{ children: React.ReactNode; className?: string; hidePadding?: boolean }> = ({ children, className = '', hidePadding = false }) => (
-  <div className={`min-h-screen bg-[#050505] text-textMain overflow-hidden relative ${className}`}>
-    {/* Global Background Gradient - Blue glow from top */}
-    <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
-    
+  <div className={`min-h-screen text-textMain overflow-hidden relative ${className}`}>
     <div className={`max-w-md mx-auto min-h-screen relative flex flex-col z-10 ${hidePadding ? '' : 'px-6 pt-safe'}`}>
       {children}
     </div>

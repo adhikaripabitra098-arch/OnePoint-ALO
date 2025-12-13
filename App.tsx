@@ -129,73 +129,80 @@ export default function App() {
 
   // --- Render Flow ---
 
-  if (appState === 'ONBOARDING') {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
-  }
-
-  if (appState === 'AUTH') {
-    return (
-      <AuthScreen 
-        initialMode={authMode}
-        onComplete={handleAuthComplete} 
-        onRegister={handleRegister}
-        onLogin={handleLogin}
-        onBack={handleBackToOnboarding}
-      />
-    );
-  }
-
-  // --- Main App ---
   return (
-    <div className="bg-[#050505] min-h-screen text-white font-sans selection:bg-white/20">
+    <div className="bg-[#050505] min-h-screen text-white font-sans selection:bg-white/20 relative">
       
-      {/* Screen Router */}
-      {currentScreen === 'home' && (
-        <HomeScreen 
-          tasks={tasks} 
-          balance={balance} 
-          credits={150} 
-          userName={user?.name || 'User'} 
-          onNavigate={setCurrentScreen}
-          onCreateTask={handleTaskCreate}
-          onOpenAssistant={() => setIsTaskModalOpen(true)}
-        />
-      )}
-      {currentScreen === 'integrations' && (
-         <IntegrationsScreen onNavigate={setCurrentScreen} />
-      )}
-      {currentScreen === 'wallet' && (
-        <WalletScreen 
-          balance={balance} 
-          transactions={transactions} 
-          onNavigate={setCurrentScreen}
-        />
-      )}
-      {currentScreen === 'settings' && (
-        <SettingsScreen 
-          onLogout={handleLogout} 
-          onDeleteAccount={handleDeleteAccount}
-          onNavigate={setCurrentScreen}
-          userPreferences={preferences}
-          onUpdatePreferences={handleUpdatePreferences}
-        />
-      )}
+      {/* GLOBAL PERSISTENT BACKGROUND - Prevents flicker */}
+      <div className="fixed top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
 
-      {/* Navigation */}
-      <BottomNavigation 
-        currentScreen={currentScreen} 
-        onNavigate={setCurrentScreen}
-        onFabClick={() => setIsTaskModalOpen(true)}
-      />
+      {/* Content Wrapper */}
+      <div className="relative z-10">
+        {appState === 'ONBOARDING' && (
+          <Onboarding onComplete={handleOnboardingComplete} />
+        )}
 
-      {/* Task Modal */}
-      {isTaskModalOpen && (
-        <TaskCreate 
-          onClose={() => setIsTaskModalOpen(false)} 
-          onCreate={handleTaskCreate} 
-          userPreferences={preferences}
-        />
-      )}
+        {appState === 'AUTH' && (
+          <AuthScreen 
+            initialMode={authMode}
+            onComplete={handleAuthComplete} 
+            onRegister={handleRegister}
+            onLogin={handleLogin}
+            onBack={handleBackToOnboarding}
+          />
+        )}
+
+        {appState === 'MAIN' && (
+          <>
+            {/* Screen Router */}
+            {currentScreen === 'home' && (
+              <HomeScreen 
+                tasks={tasks} 
+                balance={balance} 
+                credits={150} 
+                userName={user?.name || 'User'} 
+                onNavigate={setCurrentScreen}
+                onCreateTask={handleTaskCreate}
+                onOpenAssistant={() => setIsTaskModalOpen(true)}
+              />
+            )}
+            {currentScreen === 'integrations' && (
+               <IntegrationsScreen onNavigate={setCurrentScreen} />
+            )}
+            {currentScreen === 'wallet' && (
+              <WalletScreen 
+                balance={balance} 
+                transactions={transactions} 
+                onNavigate={setCurrentScreen}
+              />
+            )}
+            {currentScreen === 'settings' && (
+              <SettingsScreen 
+                onLogout={handleLogout} 
+                onDeleteAccount={handleDeleteAccount}
+                onNavigate={setCurrentScreen}
+                userPreferences={preferences}
+                onUpdatePreferences={handleUpdatePreferences}
+              />
+            )}
+
+            {/* Navigation */}
+            <BottomNavigation 
+              currentScreen={currentScreen} 
+              onNavigate={setCurrentScreen}
+              onFabClick={() => setIsTaskModalOpen(true)}
+            />
+
+            {/* Task Modal */}
+            {isTaskModalOpen && (
+              <TaskCreate 
+                onClose={() => setIsTaskModalOpen(false)} 
+                onCreate={handleTaskCreate} 
+                userPreferences={preferences}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

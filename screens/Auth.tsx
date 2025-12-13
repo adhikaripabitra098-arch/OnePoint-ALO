@@ -209,7 +209,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
               onRightIconClick={() => setShowConfirmPassword(!showConfirmPassword)}
              />
 
-             {/* LEGAL CONSENT CHECKBOX */}
+             {/* LEGAL CONSENT CHECKBOX - Increased font size to 14px */}
              <div className="flex items-start gap-3 px-2 py-3 group">
                 <div 
                   className={`mt-0.5 transition-colors cursor-pointer ${agreedToTerms ? 'text-primary' : 'text-textMuted group-hover:text-white'}`}
@@ -218,7 +218,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                   {agreedToTerms ? <CheckSquare size={20} /> : <Square size={20} />}
                 </div>
                 
-                <p className="text-[13px] text-textMuted leading-relaxed select-none font-sans font-medium">
+                <p className="text-[14px] text-textMuted leading-relaxed select-none font-sans font-medium">
                   I agree to the 
                   <span 
                     onClick={() => openLegal('TOS')}
@@ -273,12 +273,15 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
             {isLoading ? <Loader2 className="animate-spin" /> : (isRegister ? "Create Account" : "Log In")}
           </Button>
           
-          <Button 
+          {/* Biometric Button */}
+          <button 
             onClick={handleBiometric} 
-            fullWidth 
-            variant="glass" 
-            className={`border-primary/20 text-primary hover:bg-primary/5 transition-all ${isScanning ? 'bg-primary/10' : ''}`}
             disabled={isScanning || isLoading}
+            className={`
+               w-full h-[56px] rounded-full font-bold text-[16px] flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50
+               bg-[#0A0A0A] border border-white/10 text-white hover:bg-[#1a1a1a] shadow-lg
+               ${isScanning ? 'bg-white/10' : ''}
+            `}
           >
             {isScanning ? (
               <span className="flex items-center gap-3 animate-pulse font-medium">
@@ -287,26 +290,25 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
               </span>
             ) : (
               <span className="flex items-center gap-2 font-medium">
-                <ScanFace size={20} /> 
+                <ScanFace size={20} className={isRegister ? "text-white" : "text-white"} /> 
                 {isRegister ? "Enable Face ID" : "Log in with Face ID"}
               </span>
             )}
-          </Button>
+          </button>
         </div>
         
-        <div className="mt-8 text-center pb-8">
-          {!isRegister && (
-            <p className="text-sm text-textMuted font-medium">
-              Don't have an account?
-              <button 
+        {/* Footer - Only Register is clickable, single space gap */}
+        {!isRegister && (
+          <div className="mt-8 text-center pb-8 flex justify-center items-center gap-1.5">
+             <span className="text-sm text-white/60 font-medium">Don't have an account?</span>
+             <button 
                 onClick={toggleMode}
-                className="ml-2 text-white font-bold hover:underline tracking-wide"
-              >
+                className="text-sm text-white font-bold hover:text-white/80 transition-colors"
+             >
                 Register
-              </button>
-            </p>
-          )}
-        </div>
+             </button>
+          </div>
+        )}
 
       </div>
 
@@ -336,11 +338,11 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                   <Loader2 size={32} className="text-white animate-spin" />
                </div>
             ) : (
-              /* Content */
-              <div className="p-6 overflow-y-auto text-sm text-textMuted leading-relaxed space-y-4 font-medium animate-in fade-in duration-300">
+              /* Content - UPDATED FOR SHARPER TEXT */
+              <div className="p-6 overflow-y-auto text-sm text-gray-300 leading-relaxed space-y-4 font-medium animate-in fade-in duration-300">
                 {showLegal === 'TOS' ? (
                   <>
-                    <p className="text-white/80">Last Updated: {new Date().toLocaleDateString()}</p>
+                    <p className="text-gray-400">Last Updated: {new Date().toLocaleDateString()}</p>
                     
                     <p><strong className="text-white block mb-1">1. End User License Agreement (EULA)</strong>
                     By downloading or using OnePoint, you are granted a limited, non-transferable, revocable license to access and use the App for personal, non-commercial purposes. This license is subject to your compliance with these Terms.</p>
@@ -359,7 +361,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                   </>
                 ) : (
                   <>
-                    <p className="text-white/80">Effective Date: {new Date().toLocaleDateString()}</p>
+                    <p className="text-gray-400">Effective Date: {new Date().toLocaleDateString()}</p>
                     
                     <p><strong className="text-white block mb-1">1. Data Minimization</strong>
                     We only collect data necessary to function: your email (for account recovery), name, and task descriptions. Biometric data is stored exclusively on your device's Secure Enclave.</p>
