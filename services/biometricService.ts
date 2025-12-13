@@ -30,6 +30,7 @@ const bufferToBase64 = (buffer: ArrayBuffer) => {
 
 export const registerBiometrics = async (username: string): Promise<boolean | string> => {
   // 1. Check Secure Context
+  // WebAuthn REQUIRED HTTPS (or localhost)
   if (!window.isSecureContext) {
     console.warn("Biometrics require a secure context (HTTPS).");
     return "secure_context_required";
@@ -42,7 +43,13 @@ export const registerBiometrics = async (username: string): Promise<boolean | st
 
   // 3. Check Hardware Availability (Async)
   const available = await isAuthenticatorAvailable();
+  
+  // If no hardware is detected but we are on localhost, allow simulation for testing
   if (!available) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log("No biometrics found, enabling simulation for localhost.");
+        return "no_hardware_simulatable";
+    }
     console.warn("No platform authenticator available.");
     return "no_hardware";
   }
@@ -57,7 +64,8 @@ export const registerBiometrics = async (username: string): Promise<boolean | st
     const publicKey: PublicKeyCredentialCreationOptions = {
       challenge,
       rp: {
-        name: "OnePoint Life OS",
+        name: "OnePoint",
+        id: window.location.hostname // Must match current domain
       },
       user: {
         id: userId,
@@ -70,7 +78,7 @@ export const registerBiometrics = async (username: string): Promise<boolean | st
       ],
       authenticatorSelection: {
         authenticatorAttachment: "platform", // Forces TouchID/FaceID
-        userVerification: "required",
+        userVerification: "preferred", // 'preferred' is safer than 'required' for some Android devices
         requireResidentKey: false
       },
       timeout: 60000,
@@ -83,6 +91,7 @@ export const registerBiometrics = async (username: string): Promise<boolean | st
     if (credential) {
       console.log("WebAuthn Registration Successful");
       localStorage.setItem(`biometric_setup_${username}`, 'true');
+      // Store ID just in case, though we don't verify it against a backend in this local-first demo
       localStorage.setItem(`biometric_cred_id_${username}`, bufferToBase64((credential as PublicKeyCredential).rawId));
       return true;
     }
@@ -97,7 +106,7 @@ export const registerBiometrics = async (username: string): Promise<boolean | st
         msg.includes("Permissions Policy") || 
         msg.includes("document") || 
         msg.includes("publickey-credentials-create") ||
-        msg.includes("NotAllowedError") && !msg.includes("user") // Sometimes checking for generic not allowed if it's instant
+        msg.includes("NotAllowedError") && !msg.includes("user") 
     ) {
         return "iframe_blocked";
     }
@@ -133,7 +142,8 @@ export const authenticateBiometrics = async (username: string): Promise<{ succes
 
     const publicKey: PublicKeyCredentialRequestOptions = {
       challenge,
-      userVerification: "required",
+      rpId: window.location.hostname,
+      userVerification: "required", // We strictly require verification for login
       timeout: 60000,
     };
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Screen, Card, Button, BackButton } from '../components/UI';
-import { User, Bell, Shield, Trash2, LogOut, ChevronRight, ScanFace, CheckCircle, XCircle, AlertTriangle, ExternalLink, Zap, Check, Loader2, HelpCircle, FileText } from 'lucide-react';
+import { User, Bell, Shield, Trash2, LogOut, ChevronRight, ScanFace, CheckCircle, XCircle, AlertTriangle, ExternalLink, Zap, Check, Loader2, HelpCircle, FileText, Download } from 'lucide-react';
 import { registerBiometrics, enableSimulation } from '../services/biometricService';
+import { storageService } from '../services/storageService';
 import { UserPreferences, NegotiationStyle } from '../types';
 
 interface SettingsProps {
@@ -47,7 +48,7 @@ const SettingsItem: React.FC<{
 export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAccount, onNavigate, userPreferences, onUpdatePreferences }) => {
   const [bioEnabled, setBioEnabled] = useState(false);
   const [isSettingUpBio, setIsSettingUpBio] = useState(false);
-  const [setupStatus, setSetupStatus] = useState<'idle' | 'scanning' | 'success' | 'failed' | 'iframe_error' | 'no_hardware'>('idle');
+  const [setupStatus, setSetupStatus] = useState<'idle' | 'scanning' | 'success' | 'failed' | 'iframe_error' | 'no_hardware' | 'no_hardware_simulatable'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   
   // Edit States
@@ -93,10 +94,12 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
         setSetupStatus('iframe_error');
       } else if (result === 'no_hardware') {
         setSetupStatus('no_hardware');
+      } else if (result === 'no_hardware_simulatable') {
+        setSetupStatus('no_hardware_simulatable');
       } else {
         setSetupStatus('failed');
         if (result === 'cancelled') setErrorMessage("Operation cancelled or timed out.");
-        else if (result === 'secure_context_required') setErrorMessage("HTTPS required for FaceID.");
+        else if (result === 'secure_context_required') setErrorMessage("Face ID requires HTTPS (Secure Context).");
         else setErrorMessage("Unknown error occurred.");
       }
     }
@@ -121,6 +124,36 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
     setDeleteStep('PROCESSING');
     await onDeleteAccount(); // This now calls the true delete in App/Storage
     // The App component will redirect to Onboarding automatically after this finishes
+  };
+
+  // --- Data Export Feature (GDPR Right to Access) ---
+  const handleExportData = async () => {
+      // In a real app, you might fetch from a backend. Here we use storageService.
+      // We assume the user is logged in, but we need the email. 
+      // For this demo, we'll try to get it from session or fallback.
+      const session = await storageService.getSession();
+      if (!session) {
+          alert("Please log in to export data.");
+          return;
+      }
+      
+      const userData = await storageService.getUserData(session.email);
+      const exportObject = {
+          user: session,
+          data: userData,
+          exportDate: new Date().toISOString(),
+          app: "OnePoint"
+      };
+
+      const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OnePoint_Data_Export_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
   };
 
   // --- Preference Updates ---
@@ -177,6 +210,7 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
                 toggleValue={bioEnabled} 
                 onClick={handleBioToggle}
              />
+             <SettingsItem icon={Download} label="Export Data (JSON)" onClick={handleExportData} />
           </div>
         </div>
 
@@ -298,17 +332,32 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
                 <div className="w-24 h-24 mb-6 flex items-center justify-center bg-blue-500/20 rounded-full">
                    <Zap size={48} className="text-blue-500 animate-in zoom-in" />
                 </div>
-                <h2 className="text-xl font-bold mb-2">Preview Mode Detected</h2>
+                <h2 className="text-xl font-bold mb-2">Browser blocked Face ID</h2>
                 <p className="text-textMuted text-sm mb-4 font-medium">
-                   Real biometrics are blocked by this browser environment.
+                   This browser view (likely in-app or preview) doesn't support biometrics. Please open in Safari/Chrome.
                 </p>
                 <div className="w-full space-y-3">
                    <Button onClick={handleForceEnable} fullWidth variant="primary" icon={Zap} className="h-12 text-sm">
                      Enable Demo Mode
                    </Button>
-                   <p className="text-[10px] text-textMuted font-medium">
-                     This simulates a successful scan so you can test the app flow.
-                   </p>
+                </div>
+              </>
+            )}
+
+            {/* Simulated hardware for localhost */}
+            {setupStatus === 'no_hardware_simulatable' && (
+              <>
+                <div className="w-24 h-24 mb-6 flex items-center justify-center bg-yellow-500/20 rounded-full">
+                   <Zap size={48} className="text-yellow-500 animate-in zoom-in" />
+                </div>
+                <h2 className="text-xl font-bold mb-2">Dev Mode Detected</h2>
+                <p className="text-textMuted text-sm mb-4 font-medium">
+                   No biometric sensor found, but we can simulate it for testing.
+                </p>
+                <div className="w-full space-y-3">
+                   <Button onClick={handleForceEnable} fullWidth variant="primary" icon={Check} className="h-12 text-sm">
+                     Enable Simulation
+                   </Button>
                 </div>
               </>
             )}
@@ -320,8 +369,13 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
                 </div>
                 <h2 className="text-xl font-bold mb-2">Setup Failed</h2>
                 <p className="text-textMuted text-sm mb-4 font-medium">
-                   {setupStatus === 'no_hardware' ? "No biometric sensor found." : "Authentication blocked or cancelled."}
+                   {errorMessage || (setupStatus === 'no_hardware' ? "Face ID not available on this device." : "Authentication blocked or cancelled.")}
                 </p>
+                {errorMessage.includes("HTTPS") && (
+                   <p className="text-xs text-textMuted bg-white/5 p-2 rounded mb-2">
+                      Make sure you are using a secure <code>https://</code> URL.
+                   </p>
+                )}
                 <div className="w-full space-y-3">
                    <Button onClick={handleForceEnable} fullWidth variant="primary" icon={Zap} className="h-12 text-sm">
                      Enable Demo Mode
@@ -334,32 +388,6 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
             )}
 
           </div>
-        </div>
-      )}
-
-      {/* Edit Limit Modal */}
-      {editingLimit && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in">
-           <Card className="w-full max-w-sm bg-[#1A1A1A] text-center">
-              <h3 className="text-xl font-bold mb-4">Spending Limit</h3>
-              <p className="text-textMuted text-sm mb-6 font-medium">Transactions above this amount require your manual approval.</p>
-              
-              <div className="relative border-b border-white/20 mb-8 w-3/4 mx-auto">
-                <span className="absolute left-0 bottom-2 text-white text-2xl font-bold">$</span>
-                <input 
-                  type="number" 
-                  value={tempLimit}
-                  onChange={(e) => setTempLimit(e.target.value)}
-                  className="w-full bg-transparent text-center text-3xl font-bold pb-2 outline-none"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <Button onClick={() => setEditingLimit(false)} variant="secondary" fullWidth>Cancel</Button>
-                <Button onClick={saveLimit} fullWidth>Save</Button>
-              </div>
-           </Card>
         </div>
       )}
 
@@ -377,7 +405,7 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
                   <button
                     key={style}
                     onClick={() => saveNegotiation(style)}
-                    className={`w-full p-4 rounded-xl flex justify-between items-center transition-colors ${userPreferences?.negotiationStyle === style ? 'bg-white text-black' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                    className={`w-full p-4 rounded-xl flex justify-between items-center transition-colors border-2 ${userPreferences?.negotiationStyle === style ? 'bg-white text-black border-black' : 'bg-white/5 text-white border-transparent hover:bg-white/10'}`}
                   >
                     <span className="font-semibold capitalize">{style.toLowerCase()}</span>
                     {userPreferences?.negotiationStyle === style && <Check size={18} />}

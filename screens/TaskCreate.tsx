@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Screen, Button, Card, Input } from '../components/UI';
-import { X, Mic, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
+import { X, Mic, Image as ImageIcon, Sparkles, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { parseTaskInput } from '../services/geminiService';
+import { authenticateBiometrics } from '../services/biometricService';
 import { Task, TaskStatus, TaskType, UserPreferences } from '../types';
 
 interface TaskCreateProps {
@@ -14,6 +15,10 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysis, setAnalysis] = useState<{title: string, type: TaskType, summary: string, cost: number} | null>(null);
+  
+  // States for Security Check
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
     if (!input.trim()) return;
@@ -30,15 +35,50 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
     setIsProcessing(false);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!analysis) return;
+    
+    // DEFAULT PREFERENCES IF NULL
+    const hardLimit = userPreferences?.maxSpendingThreshold || 100;
+    const softLimit = userPreferences?.autoApproveUnder || 25;
+    
+    let initialStatus = TaskStatus.CREATED;
+    let requiresAuth = false;
+
+    // --- SPENDING LIMIT LOGIC ---
+    // Rule 1: High Value -> Requires Biometric Auth NOW
+    if (analysis.cost > hardLimit) {
+      requiresAuth = true;
+    } 
+    // Rule 2: Low Value -> Auto Approve
+    else if (analysis.cost > 0 && analysis.cost <= softLimit) {
+      initialStatus = TaskStatus.IN_PROGRESS;
+    }
+    // Rule 3: Medium Value -> Waiting Approval
+    else if (analysis.cost > softLimit) {
+      initialStatus = TaskStatus.WAITING_APPROVAL;
+    }
+
+    if (requiresAuth) {
+       setIsAuthenticating(true);
+       setAuthError(null);
+       const result = await authenticateBiometrics('OnePoint User');
+       setIsAuthenticating(false);
+
+       if (!result.success) {
+         setAuthError("Authorization Failed: High-value transactions require Face ID.");
+         return; 
+       }
+       // If successful, we can auto-approve it because the user just auth'd it
+       initialStatus = TaskStatus.IN_PROGRESS;
+    }
     
     const newTask: Task = {
       id: Math.random().toString(36).substr(2, 9),
       title: analysis.title,
       description: analysis.summary,
       type: analysis.type,
-      status: TaskStatus.CREATED,
+      status: initialStatus,
       estimatedCost: analysis.cost,
       confidenceScore: 0.9,
       createdAt: new Date(),
@@ -104,15 +144,30 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
                 <h2 className="text-xl font-bold mb-2">{analysis.title}</h2>
                 <p className="text-textMuted mb-4 font-medium">{analysis.summary}</p>
                 {analysis.cost > 0 && (
-                   <div className="inline-block px-3 py-1 bg-surface rounded-lg text-sm font-mono border border-white/10">
-                     Est. Cost: ${analysis.cost}
+                   <div className="flex items-center gap-2">
+                     <div className="inline-block px-3 py-1 bg-surface rounded-lg text-sm font-mono border border-white/10">
+                       Est. Cost: ${analysis.cost}
+                     </div>
+                     {analysis.cost > (userPreferences?.maxSpendingThreshold || 100) && (
+                        <div className="text-xs text-yellow-500 font-bold flex items-center gap-1">
+                          <ShieldCheck size={12} /> Exceeds Limit
+                        </div>
+                     )}
                    </div>
                 )}
              </Card>
 
              <p className="text-xs text-center text-textMuted mt-4 font-medium">
-               OnePoint will now take over. You will be notified of any approvals needed.
+               {analysis.cost > (userPreferences?.maxSpendingThreshold || 100) 
+                  ? "Biometric authentication required due to high cost." 
+                  : "OnePoint will now take over. You will be notified of any approvals needed."}
              </p>
+             
+             {authError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-200 text-sm">
+                   <AlertTriangle size={16} /> {authError}
+                </div>
+             )}
           </div>
         )}
       </div>
@@ -127,8 +182,10 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
             Create Task
           </Button>
         ) : (
-          <Button onClick={handleCreate} fullWidth icon={Sparkles}>
-            Confirm & Execute
+          <Button onClick={handleCreate} fullWidth icon={Sparkles} disabled={isAuthenticating}>
+            {isAuthenticating ? (
+              <span className="flex items-center gap-2"><Loader2 className="animate-spin" /> Verifying...</span>
+            ) : analysis.cost > (userPreferences?.maxSpendingThreshold || 100) ? "Authorize & Execute" : "Confirm & Execute"}
           </Button>
         )}
       </div>

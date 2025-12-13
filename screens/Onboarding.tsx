@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Screen, Button, BackButton } from '../components/UI';
 import { ArrowRight, Check, Shield, Zap, Lock, Smartphone, Camera, MapPin, Bell } from 'lucide-react';
 import { NegotiationStyle, UserPreferences } from '../types';
@@ -23,9 +23,22 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     camera: false
   });
 
+  // NOTE: Initial permission check removed per user request. 
+  // User must explicitly tap "Allow" to trigger checks/requests.
+
   // Local state strings to manage input without leading zero issues
   const [limitInput, setLimitInput] = useState('100');
   const [approveInput, setApproveInput] = useState('25');
+
+  // Prevent ghost clicks/focus during step transitions
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (isTransitioning) {
+        const timer = setTimeout(() => setIsTransitioning(false), 500);
+        return () => clearTimeout(timer);
+    }
+  }, [step]); 
 
   const handleLimitChange = (val: string) => {
     const numeric = val.replace(/[^0-9]/g, '');
@@ -43,11 +56,13 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
   const nextStep = () => {
     if (navigator.vibrate) navigator.vibrate(10);
+    setIsTransitioning(true); 
     setStep(s => s + 1);
   };
 
   const prevStep = () => {
     if (navigator.vibrate) navigator.vibrate(10);
+    setIsTransitioning(true);
     setStep(s => Math.max(0, s - 1));
   };
   
@@ -59,42 +74,64 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const requestPermission = async (type: 'notifications' | 'location' | 'camera') => {
     if (navigator.vibrate) navigator.vibrate(5);
     
-    switch (type) {
+    try {
+      switch (type) {
         case 'notifications':
-            if ('Notification' in window) {
-                try {
-                  const permission = await Notification.requestPermission();
-                  if (permission === 'granted') {
-                    setPermissions(p => ({...p, notifications: true}));
-                  } else if (permission === 'denied') {
-                    alert('Notifications are blocked. Please enable them in your device settings.');
-                  }
-                } catch (e) {
-                  console.error("Notification Error:", e);
-                }
-            }
-            break;
+          if (!('Notification' in window)) {
+             alert("Notifications are not supported on this device.");
+             return;
+          }
+          const notifResult = await Notification.requestPermission();
+          if (notifResult === 'granted') {
+             setPermissions(p => ({...p, notifications: true}));
+          } else {
+             alert('Notifications blocked. Please enable them in system settings.');
+          }
+          break;
+          
         case 'location':
-            if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    () => setPermissions(p => ({...p, location: true})),
-                    (err) => {
-                      console.log('Location denied', err);
-                      if (err.code === 1) alert('Location access denied. Please enable it in settings.');
-                    }
-                );
-            }
-            break;
+          if (!('geolocation' in navigator)) {
+             alert("Geolocation is not supported.");
+             return;
+          }
+          // Increased timeout to 60s to fix "works for 10 sec" timeout issue
+          navigator.geolocation.getCurrentPosition(
+            () => setPermissions(p => ({...p, location: true})),
+            (err) => {
+              if (err.code === 1) alert('Location access denied. Please enable in device settings.');
+              else if (err.code === 3) console.warn('Location request timed out.');
+              else console.warn('Location error:', err.message);
+            },
+            { enableHighAccuracy: true, timeout: 60000, maximumAge: 0 }
+          );
+          break;
+          
         case 'camera':
-             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                setPermissions(p => ({...p, camera: true}));
-                stream.getTracks().forEach(track => track.stop());
-             } catch(e) {
-                 console.log("Camera denied");
-                 alert('Camera access is required for receipts. Please allow access.');
+           // Check if API exists
+           if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+              alert("Camera API not supported or context is not secure (HTTPS required).");
+              return;
+           }
+           try {
+             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+             // Access granted successfully
+             setPermissions(p => ({...p, camera: true}));
+             
+             // Important: We stop the stream to release the camera light, 
+             // but we keep the 'camera: true' state in the UI.
+             stream.getTracks().forEach(t => t.stop());
+           } catch (err: any) {
+             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+               alert('Camera access denied. Please allow camera access in your browser settings.');
+             } else {
+               console.error("Camera error:", err);
+               alert('Could not access camera. Please try again.');
              }
-             break;
+           }
+           break;
+      }
+    } catch (e: any) {
+       console.error("Permission request failed:", e);
     }
   };
 
@@ -105,7 +142,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         return (
           // Splash Container
           <div className="h-full min-h-screen flex flex-col justify-between relative z-10 pt-16 pb-8">
-            <div className="flex flex-col items-center mt-12">
+            <div className="flex flex-col items-center mt-12 flex-1 justify-center">
               <div className="p-4 mb-6">
                 <div className="w-24 h-24 relative flex items-center justify-center animate-float">
                     <div className="absolute inset-0 border-[3px] border-white/20 rounded-full" />
@@ -119,31 +156,31 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               </h1>
             </div>
 
-            <div className="flex flex-col w-full gap-6">
-              {/* Updated font color to text-white/60 to match 'Have an account?' */}
-              <div className="flex justify-center gap-6">
-                <div className="flex items-center gap-1.5">
-                  <Lock size={12} className="text-white/60" />
-                  <span className="text-[10px] tracking-wide text-white/60 uppercase">AES-256 ENCRYPTED</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Smartphone size={12} className="text-white/60" />
-                  <span className="text-[10px] tracking-wide text-white/60 uppercase">ON-DEVICE PROCESSING</span>
-                </div>
-              </div>
-
-              <div className="w-full space-y-4">
+            <div className="flex flex-col w-full">
+              <div className="w-full space-y-4 mb-10">
                 <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Get Started</Button>
                 
-                {/* Footer: Non-clickable text + Clickable Action */}
                 <div className="w-full h-[56px] flex items-center justify-center gap-1.5">
-                  <span className="text-sm text-white/60 font-medium">Have an account?</span>
+                  <span className="text-sm text-white/60 font-medium">Already have an account?</span>
                   <button 
                     onClick={() => finishSetup('LOGIN')}
                     className="text-sm font-bold text-white hover:text-white/80 transition-colors cursor-pointer"
                   >
                     Log In
                   </button>
+                </div>
+              </div>
+
+              {/* Footer / Trust Signals - Moved here for cleaner UI */}
+              <div className="flex justify-center gap-6 pb-2 opacity-40">
+                <div className="flex items-center gap-1.5">
+                  <Lock size={10} className="text-white" />
+                  <span className="text-[9px] tracking-widest text-white uppercase font-bold">AES-256 Encrypted</span>
+                </div>
+                <div className="w-px h-3 bg-white/30" />
+                <div className="flex items-center gap-1.5">
+                  <Smartphone size={10} className="text-white" />
+                  <span className="text-[9px] tracking-widest text-white uppercase font-bold">On-Device AI</span>
                 </div>
               </div>
             </div>
@@ -159,7 +196,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             </div>
 
             {/* Scrollable Content Area */}
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+            {/* Pointer events none ensures clicks don't register on inputs during fade */}
+            <div className={`flex-1 overflow-y-auto no-scrollbar pb-32 ${isTransitioning ? 'pointer-events-none' : ''}`}>
               <div className="mt-32 mb-8">
                 <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
                 <p className="text-white/60 text-lg leading-relaxed font-medium">
@@ -169,13 +207,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
               <div className="space-y-6">
                 {/* Card 1: Max Limit */}
-                <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
+                {/* Fixed border: border-white/20 always visible, no focus change */}
+                <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
                   <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
                     <Shield size={60} />
                   </div>
                   <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
                   <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
-                  <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
+                  
+                  {/* Stable underline border */}
+                  <div className="relative border-b border-white/20">
                     <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
                     <input 
                       type="tel"
@@ -183,18 +224,20 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                       onChange={(e) => handleLimitChange(e.target.value)}
                       placeholder="0"
                       className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
+                      autoComplete="off"
+                      disabled={isTransitioning}
                     />
                   </div>
                 </div>
 
                 {/* Card 2: Auto Approve */}
-                <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
+                <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
                   <div className="absolute right-0 top-0 p-4 opacity-10">
                     <Zap size={60} />
                   </div>
                   <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
                   <p className="text-sm text-white/60 mb-6 font-medium">Transactions up to this amount are handled instantly.</p>
-                  <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
+                  <div className="relative border-b border-white/20">
                     <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
                     <input 
                       type="tel"
@@ -202,6 +245,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                       onChange={(e) => handleApproveChange(e.target.value)}
                       placeholder="0"
                       className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
+                      autoComplete="off"
+                      disabled={isTransitioning}
                     />
                   </div>
                 </div>
@@ -222,8 +267,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               <BackButton onClick={prevStep} />
             </div>
 
-            {/* Scrollable Area */}
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+            {/* Content ... (Same as before) */}
+            <div className={`flex-1 overflow-y-auto no-scrollbar pb-32 ${isTransitioning ? 'pointer-events-none' : ''}`}>
               <div className="mt-32 mb-6">
                 <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
                 <p className="text-white/60 text-lg leading-relaxed font-medium">
@@ -241,7 +286,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         if (navigator.vibrate) navigator.vibrate(5);
                         setPrefs({...prefs, negotiationStyle: style});
                       }}
-                      className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 border ${isSelected ? 'bg-white text-black border-white shadow-glow transform scale-[1.02]' : 'bg-[#0A0A0A] border-white/10 hover:bg-[#1a1a1a] text-white'}`}
+                      className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 w-full box-border ${isSelected ? 'bg-white text-black border-2 border-black' : 'bg-[#0A0A0A] border border-white/20 hover:bg-[#1a1a1a] text-white'}`}
                     >
                       <div className="flex items-center justify-between">
                         <div>
@@ -279,7 +324,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               <BackButton onClick={prevStep} />
             </div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+            <div className={`flex-1 overflow-y-auto no-scrollbar pb-32 ${isTransitioning ? 'pointer-events-none' : ''}`}>
               <div className="mt-32 mb-8">
                 <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
                 <p className="text-white/60 text-lg leading-relaxed font-medium">
@@ -294,7 +339,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                   { id: 'location', icon: MapPin, label: 'Location', desc: 'Automated pickups & services', active: permissions.location },
                   { id: 'camera', icon: Camera, label: 'Camera', desc: 'Receipt scanning & vision', active: permissions.camera }
                 ].map((item: any) => (
-                  <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/10 flex items-center justify-between shadow-lg">
+                  <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/20 flex items-center justify-between shadow-lg">
                       <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
                               <item.icon size={22} className={item.active ? "text-green-400" : "text-white"} />
@@ -331,7 +376,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     }
   };
 
-  // Persistent Wrapper
   return (
     <Screen hidePadding={false} className="relative">
       {renderContent()}
