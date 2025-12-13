@@ -222,7 +222,7 @@ export const HomeScreen: React.FC<HomeProps> = ({ tasks, balance, credits, userN
   return (
     <Screen>
       {/* 1. Header & Notifications - INCREASED TOP MARGIN FOR CAMERA SAFETY */}
-      <div className="flex justify-between items-center mt-20 mb-6 animate-slide-up">
+      <div className="flex justify-between items-center mt-28 mb-6 animate-slide-up">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{greeting}</h1>
           <h2 className="text-3xl font-bold text-white/40 tracking-tight mt-1">{userName}</h2>

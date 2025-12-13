@@ -158,11 +158,11 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
 
   return (
     <Screen>
-       <div className="absolute top-6 left-2 z-50">
+       <div className="absolute top-12 left-6 z-50">
           <BackButton onClick={onBack} />
         </div>
 
-      <div className="flex-1 flex flex-col pt-24 pb-10 overflow-y-auto no-scrollbar animate-slide-up">
+      <div className="flex-1 flex flex-col pt-32 pb-10 overflow-y-auto no-scrollbar animate-slide-up">
         
         {/* Header */}
         <div className="mb-6 px-1">
@@ -172,7 +172,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
            </p>
         </div>
 
-        <div className="space-y-4 mb-4">
+        <div className="space-y-4 mb-2">
           {isRegister && (
              <Input 
               placeholder="Full Name" 
@@ -209,7 +209,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
               onRightIconClick={() => setShowConfirmPassword(!showConfirmPassword)}
              />
 
-             {/* LEGAL CONSENT CHECKBOX - Increased font size to 14px */}
+             {/* LEGAL CONSENT CHECKBOX */}
              <div className="flex items-start gap-3 px-2 py-3 group">
                 <div 
                   className={`mt-0.5 transition-colors cursor-pointer ${agreedToTerms ? 'text-primary' : 'text-textMuted group-hover:text-white'}`}
@@ -222,14 +222,14 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                   I agree to the 
                   <span 
                     onClick={() => openLegal('TOS')}
-                    className="text-white underline hover:text-accent cursor-pointer mx-1 transition-colors"
+                    className="text-white hover:text-accent cursor-pointer mx-1 transition-colors"
                   >
                     Terms of Service (EULA)
                   </span> 
                   and 
                   <span 
                     onClick={() => openLegal('PRIVACY')}
-                    className="text-white underline hover:text-accent cursor-pointer mx-1 transition-colors"
+                    className="text-white hover:text-accent cursor-pointer mx-1 transition-colors"
                   >
                     Privacy Policy
                   </span>. 
@@ -251,8 +251,8 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
           )}
         </div>
 
-        {/* Notifications Area */}
-        <div className="min-h-[50px] mb-4 flex flex-col justify-end">
+        {/* Notifications Area - Reduced Height and Margin */}
+        <div className="min-h-[20px] mb-2 flex flex-col justify-end">
           {error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-200 text-sm animate-in fade-in slide-in-from-top-2">
               <AlertCircle size={18} className="text-red-400 mt-0.5 shrink-0" />

@@ -17,9 +17,9 @@ const SettingsItem: React.FC<{
   label: string, 
   value?: string, 
   isDestructive?: boolean, 
-  toggle?: boolean,
-  toggleValue?: boolean,
-  onClick?: () => void
+  toggle?: boolean, 
+  toggleValue?: boolean, 
+  onClick?: () => void 
 }> = ({ icon: Icon, label, value, isDestructive, toggle, toggleValue, onClick }) => (
   <div 
     onClick={onClick}
@@ -157,11 +157,11 @@ export const SettingsScreen: React.FC<SettingsProps> = ({ onLogout, onDeleteAcco
 
   return (
     <Screen>
-      <div className="absolute top-6 left-2 z-50">
+      <div className="absolute top-12 left-6 z-50">
         <BackButton onClick={() => onNavigate('home')} />
       </div>
 
-      <div className="mt-20 mb-6">
+      <div className="mt-32 mb-6">
         <h1 className="text-2xl font-bold">Settings</h1>
       </div>
 

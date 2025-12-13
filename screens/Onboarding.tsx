@@ -103,7 +103,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     switch(step) {
       case 0:
         return (
-          // Splash Container - Animations removed to fix flickering
+          // Splash Container
           <div className="h-full min-h-screen flex flex-col justify-between relative z-10 pt-16 pb-8">
             <div className="flex flex-col items-center mt-12">
               <div className="p-4 mb-6">
@@ -120,14 +120,15 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             </div>
 
             <div className="flex flex-col w-full gap-6">
-              <div className="flex justify-center gap-6 opacity-60">
+              {/* Updated font color to text-white/60 to match 'Have an account?' */}
+              <div className="flex justify-center gap-6">
                 <div className="flex items-center gap-1.5">
-                  <Lock size={12} className="text-white" />
-                  <span className="text-[10px] font-semibold tracking-wider text-white">AES-256 ENCRYPTED</span>
+                  <Lock size={12} className="text-white/60" />
+                  <span className="text-[10px] tracking-wide text-white/60 uppercase">AES-256 ENCRYPTED</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Smartphone size={12} className="text-white" />
-                  <span className="text-[10px] font-semibold tracking-wider text-white">ON-DEVICE PROCESSING</span>
+                  <Smartphone size={12} className="text-white/60" />
+                  <span className="text-[10px] tracking-wide text-white/60 uppercase">ON-DEVICE PROCESSING</span>
                 </div>
               </div>
 
@@ -151,55 +152,58 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
       case 1:
         return (
-          // Inner Pages Container
-          <div className="pt-6">
-            <div className="absolute top-6 left-0 z-50">
+          // Inner Pages Container - Back button at top-12 left-6
+          <div className="h-full flex flex-col pt-6">
+            <div className="absolute top-12 left-6 z-50">
               <BackButton onClick={prevStep} />
             </div>
 
-            <div className="mt-20 mb-8">
-              <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
-              <p className="text-white/60 text-lg leading-relaxed font-medium">
-                Define the autonomy level for your AI agent. You retain full control.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              {/* Card 1: Max Limit */}
-              <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
-                <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
-                  <Shield size={60} />
-                </div>
-                <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
-                <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
-                <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
-                  <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
-                  <input 
-                    type="tel"
-                    value={limitInput}
-                    onChange={(e) => handleLimitChange(e.target.value)}
-                    placeholder="0"
-                    className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
-                  />
-                </div>
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+              <div className="mt-32 mb-8">
+                <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
+                <p className="text-white/60 text-lg leading-relaxed font-medium">
+                  Define the autonomy level for your AI agent. You retain full control.
+                </p>
               </div>
 
-              {/* Card 2: Auto Approve */}
-              <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
-                <div className="absolute right-0 top-0 p-4 opacity-10">
-                  <Zap size={60} />
+              <div className="space-y-6">
+                {/* Card 1: Max Limit */}
+                <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
+                  <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
+                    <Shield size={60} />
+                  </div>
+                  <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
+                  <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
+                  <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
+                    <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
+                    <input 
+                      type="tel"
+                      value={limitInput}
+                      onChange={(e) => handleLimitChange(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
+                    />
+                  </div>
                 </div>
-                <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
-                <p className="text-sm text-white/60 mb-6 font-medium">Small tasks handled instantly.</p>
-                <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
-                  <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
-                  <input 
-                    type="tel"
-                    value={approveInput}
-                    onChange={(e) => handleApproveChange(e.target.value)}
-                    placeholder="0"
-                    className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
-                  />
+
+                {/* Card 2: Auto Approve */}
+                <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/10 shadow-xl transition-all focus-within:border-white/40">
+                  <div className="absolute right-0 top-0 p-4 opacity-10">
+                    <Zap size={60} />
+                  </div>
+                  <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
+                  <p className="text-sm text-white/60 mb-6 font-medium">Transactions up to this amount are handled instantly.</p>
+                  <div className="relative border-b border-white/20 focus-within:border-white transition-colors">
+                    <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
+                    <input 
+                      type="tel"
+                      value={approveInput}
+                      onChange={(e) => handleApproveChange(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -212,49 +216,53 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
       case 2:
         return (
-          <div className="pt-6">
-            <div className="absolute top-6 left-0 z-50">
+          // Agent Persona - Back button at top-12 left-6
+          <div className="h-full flex flex-col pt-6">
+            <div className="absolute top-12 left-6 z-50">
               <BackButton onClick={prevStep} />
             </div>
 
-            <div className="mt-20 mb-6">
-              <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
-              <p className="text-white/60 text-lg leading-relaxed font-medium">
-                How should OnePoint communicate with third parties on your behalf?
-              </p>
-            </div>
+            {/* Scrollable Area */}
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+              <div className="mt-32 mb-6">
+                <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
+                <p className="text-white/60 text-lg leading-relaxed font-medium">
+                  How should OnePoint communicate with third parties on your behalf?
+                </p>
+              </div>
 
-            <div className="space-y-4 overflow-y-auto max-h-[55vh] pb-24 pr-1" style={{ scrollbarWidth: 'none' }}>
-              {Object.values(NegotiationStyle).map((style) => {
-                const isSelected = prefs.negotiationStyle === style;
-                return (
-                  <div 
-                    key={style}
-                    onClick={() => {
-                      if (navigator.vibrate) navigator.vibrate(5);
-                      setPrefs({...prefs, negotiationStyle: style});
-                    }}
-                    className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 border ${isSelected ? 'bg-white text-black border-white shadow-glow transform scale-[1.02]' : 'bg-[#0A0A0A] border-white/10 hover:bg-[#1a1a1a] text-white'}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-bold capitalize text-xl mb-1">{style.toLowerCase()}</h3>
-                        <p className={`text-sm font-medium ${isSelected ? 'text-gray-600' : 'text-white/60'}`}>
-                          {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
-                          {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
-                          {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
-                          {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
-                        </p>
-                      </div>
-                      {isSelected && (
-                        <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
-                          <Check size={16} className="text-white stroke-[3]" />
+              <div className="space-y-4">
+                {Object.values(NegotiationStyle).map((style) => {
+                  const isSelected = prefs.negotiationStyle === style;
+                  return (
+                    <div 
+                      key={style}
+                      onClick={() => {
+                        if (navigator.vibrate) navigator.vibrate(5);
+                        setPrefs({...prefs, negotiationStyle: style});
+                      }}
+                      className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 border ${isSelected ? 'bg-white text-black border-white shadow-glow transform scale-[1.02]' : 'bg-[#0A0A0A] border-white/10 hover:bg-[#1a1a1a] text-white'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold capitalize text-xl mb-1">{style.toLowerCase()}</h3>
+                          <p className={`text-sm font-medium ${isSelected ? 'text-gray-600' : 'text-white/60'}`}>
+                            {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
+                            {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
+                            {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
+                            {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
+                          </p>
                         </div>
-                      )}
+                        {isSelected && (
+                          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
+                            <Check size={16} className="text-white stroke-[3]" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             <div className="absolute bottom-10 left-6 right-6">
@@ -265,48 +273,51 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
       case 3:
         return (
-          <div className="pt-6">
-            <div className="absolute top-6 left-0 z-50">
+          // System Access - Back button at top-12 left-6
+          <div className="h-full flex flex-col pt-6">
+            <div className="absolute top-12 left-6 z-50">
               <BackButton onClick={prevStep} />
             </div>
 
-            <div className="mt-20 mb-8">
-              <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
-              <p className="text-white/60 text-lg leading-relaxed font-medium">
-                Grant OnePoint access to your device hardware to enable autonomous features.
-              </p>
-            </div>
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+              <div className="mt-32 mb-8">
+                <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
+                <p className="text-white/60 text-lg leading-relaxed font-medium">
+                  Grant OnePoint access to your device hardware to enable autonomous features.
+                </p>
+              </div>
 
-            <div className="space-y-4">
-              {/* Permissions Cards */}
-              {[
-                { id: 'notifications', icon: Bell, label: 'Notifications', desc: 'Critical alerts & approvals', active: permissions.notifications },
-                { id: 'location', icon: MapPin, label: 'Location', desc: 'Automated pickups & services', active: permissions.location },
-                { id: 'camera', icon: Camera, label: 'Camera', desc: 'Receipt scanning & vision', active: permissions.camera }
-              ].map((item: any) => (
-                <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/10 flex items-center justify-between shadow-lg">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
-                            <item.icon size={22} className={item.active ? "text-green-400" : "text-white"} />
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-semibold text-white mb-0.5">{item.label}</h3>
-                            <p className="text-sm text-white/60 font-medium">{item.desc}</p>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={() => requestPermission(item.id)}
-                        disabled={item.active}
-                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${item.active ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
-                    >
-                        {item.active ? 'Allowed' : 'Allow'}
-                    </button>
-                </div>
-              ))}
+              <div className="space-y-4">
+                {/* Permissions Cards */}
+                {[
+                  { id: 'notifications', icon: Bell, label: 'Notifications', desc: 'Critical alerts & approvals', active: permissions.notifications },
+                  { id: 'location', icon: MapPin, label: 'Location', desc: 'Automated pickups & services', active: permissions.location },
+                  { id: 'camera', icon: Camera, label: 'Camera', desc: 'Receipt scanning & vision', active: permissions.camera }
+                ].map((item: any) => (
+                  <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/10 flex items-center justify-between shadow-lg">
+                      <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
+                              <item.icon size={22} className={item.active ? "text-green-400" : "text-white"} />
+                          </div>
+                          <div>
+                              <h3 className="text-xl font-semibold text-white mb-0.5">{item.label}</h3>
+                              <p className="text-sm text-white/60 font-medium">{item.desc}</p>
+                          </div>
+                      </div>
+                      <button 
+                          onClick={() => requestPermission(item.id)}
+                          disabled={item.active}
+                          className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${item.active ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
+                      >
+                          {item.active ? 'Allowed' : 'Allow'}
+                      </button>
+                  </div>
+                ))}
 
-              <p className="text-sm text-center text-white/30 pt-4 px-6 font-medium">
-                 You can modify these permissions later in your device settings.
-              </p>
+                <p className="text-sm text-center text-white/30 pt-4 px-6 font-medium">
+                   You can modify these permissions later in your device settings.
+                </p>
+              </div>
             </div>
 
             <div className="absolute bottom-10 left-6 right-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
