@@ -1,0 +1,21 @@
+{
+  "name": "OnePoint OS",
+  "short_name": "OnePoint",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/gh/google/material-design-icons/png/action/all_inclusive/materialicons/48dp/1x/baseline_all_inclusive_white_48dp.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn.jsdelivr.net/gh/google/material-design-icons/png/action/all_inclusive/materialicons/48dp/2x/baseline_all_inclusive_white_48dp.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -4,7 +4,8 @@ export enum TaskStatus {
   IN_PROGRESS = 'IN_PROGRESS',
   WAITING_APPROVAL = 'WAITING_APPROVAL',
   COMPLETED = 'COMPLETED',
-  REFUNDED = 'REFUNDED'
+  REFUNDED = 'REFUNDED',
+  FAILED = 'FAILED'
 }
 
 export enum TaskType {
@@ -34,6 +35,8 @@ export interface Task {
   dueDate?: Date;
   aiAnalysis?: string;
   progress?: number; // 0-100 for progress bar
+  vendor?: string;
+  vendorLogo?: string; // URL or placeholder char
 }
 
 export interface Suggestion {
@@ -43,6 +46,15 @@ export interface Suggestion {
   type: TaskType;
   impact: 'HIGH' | 'MEDIUM' | 'LOW';
   savings?: number;
+}
+
+export interface PredictiveAlert {
+  id: string;
+  title: string;
+  message: string;
+  type: 'WARNING' | 'INFO' | 'OPPORTUNITY';
+  date: Date;
+  actionLabel?: string;
 }
 
 export interface UserPreferences {

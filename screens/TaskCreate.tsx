@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Screen, Button, Card, Input } from '../components/UI';
-import { X, Mic, Image as ImageIcon, Sparkles, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, Mic, Image as ImageIcon, Sparkles, Loader2, ShieldCheck, AlertTriangle, Trash2, StopCircle } from 'lucide-react';
 import { parseTaskInput } from '../services/geminiService';
 import { authenticateBiometrics } from '../services/biometricService';
 import { Task, TaskStatus, TaskType, UserPreferences } from '../types';
@@ -11,21 +11,87 @@ interface TaskCreateProps {
   userPreferences: UserPreferences | null;
 }
 
+// Helper to access Web Speech API (Browser native)
+// NOTE: For Production Release (App Store), replace this with a real API like OpenAI Whisper or Google Cloud Speech if you need cross-browser support beyond Chrome/Safari.
+const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
 export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userPreferences }) => {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysis, setAnalysis] = useState<{title: string, type: TaskType, summary: string, cost: number} | null>(null);
   
-  // States for Security Check
+  // Media State
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Voice State
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Security Check State
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // --- Image Handling ---
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
+  // --- Voice Handling ---
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser environment. Please type your request.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => setIsListening(true);
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev + (prev ? ' ' : '') + transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+
   const handleAnalyze = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && !selectedImage) return;
     
     setIsProcessing(true);
-    // Pass user preferences to the AI service
-    const result = await parseTaskInput(input, userPreferences);
+    // Pass text AND image to the updated Gemini Service
+    const result = await parseTaskInput(input, userPreferences, selectedImage);
+    
     setAnalysis({
       title: result.title,
       type: result.type,
@@ -38,23 +104,19 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
   const handleCreate = async () => {
     if (!analysis) return;
     
-    // DEFAULT PREFERENCES IF NULL
     const hardLimit = userPreferences?.maxSpendingThreshold || 100;
     const softLimit = userPreferences?.autoApproveUnder || 25;
     
     let initialStatus = TaskStatus.CREATED;
     let requiresAuth = false;
 
-    // --- SPENDING LIMIT LOGIC (Enforcing TOS Financial Terms) ---
-    // Rule 1: High Value -> Requires Biometric Auth NOW
+    // --- SPENDING LIMIT LOGIC ---
     if (analysis.cost > hardLimit) {
       requiresAuth = true;
     } 
-    // Rule 2: Low Value -> Auto Approve
     else if (analysis.cost > 0 && analysis.cost <= softLimit) {
       initialStatus = TaskStatus.IN_PROGRESS;
     }
-    // Rule 3: Medium Value -> Waiting Approval
     else if (analysis.cost > softLimit) {
       initialStatus = TaskStatus.WAITING_APPROVAL;
     }
@@ -69,7 +131,6 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
          setAuthError("Authorization Failed: High-value transactions require Face ID.");
          return; 
        }
-       // If successful, we can auto-approve it because the user just auth'd it
        initialStatus = TaskStatus.IN_PROGRESS;
     }
     
@@ -98,29 +159,70 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
         </button>
       </div>
 
-      <div className="flex-1 p-6 flex flex-col">
+      <div className="flex-1 p-6 flex flex-col overflow-y-auto">
         {!analysis ? (
           <>
             <div className="relative">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="e.g., Get a refund from Amazon for order #123..."
-                className="w-full h-32 bg-surfaceHighlight/50 border border-white/5 rounded-2xl p-4 text-lg outline-none resize-none placeholder:text-textMuted font-medium"
+                placeholder={isListening ? "Listening..." : "e.g., Get a refund from Amazon for order #123..."}
+                className={`w-full h-32 bg-surfaceHighlight/50 border ${isListening ? 'border-red-500/50 animate-pulse' : 'border-white/5'} rounded-2xl p-4 text-lg outline-none resize-none placeholder:text-textMuted font-medium transition-all`}
                 autoFocus
               />
+              {isListening && (
+                 <div className="absolute top-4 right-4 text-red-500 animate-pulse">
+                    <Mic size={20} fill="currentColor" />
+                 </div>
+              )}
             </div>
+            
+            {/* Image Preview */}
+            {selectedImage && (
+              <div className="mt-4 relative rounded-2xl overflow-hidden border border-white/10 h-40 bg-black/40 group">
+                <img src={selectedImage} alt="Upload preview" className="w-full h-full object-cover opacity-80" />
+                <button 
+                  onClick={() => setSelectedImage(null)}
+                  className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-red-500 transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/60 rounded-full text-xs font-medium text-white backdrop-blur-md">
+                   Image attached
+                </div>
+              </div>
+            )}
             
             <div className="mt-4">
                <label className="text-xs font-semibold text-textMuted uppercase tracking-wider ml-1 mb-2 block">Quick Add</label>
                <div className="grid grid-cols-2 gap-3">
-                 <button className="h-24 bg-surfaceHighlight/30 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-surfaceHighlight/50 transition-colors">
+                 {/* HIDDEN FILE INPUT */}
+                 <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleImageUpload} 
+                    className="hidden" 
+                    accept="image/*"
+                 />
+                 
+                 <button 
+                   onClick={triggerFileInput}
+                   className="h-24 bg-surfaceHighlight/30 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-surfaceHighlight/50 active:scale-[0.98] transition-all"
+                 >
                     <ImageIcon className="text-primary" />
                     <span className="text-sm font-medium">Upload Image</span>
                  </button>
-                 <button className="h-24 bg-surfaceHighlight/30 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-surfaceHighlight/50 transition-colors">
-                    <Mic className="text-blue-400" />
-                    <span className="text-sm font-medium">Voice Note</span>
+                 
+                 <button 
+                   onClick={toggleListening}
+                   className={`h-24 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-surfaceHighlight/50 active:scale-[0.98] transition-all ${isListening ? 'bg-red-500/20 border border-red-500/50' : 'bg-surfaceHighlight/30'}`}
+                 >
+                    {isListening ? (
+                       <StopCircle className="text-red-500 animate-pulse" />
+                    ) : (
+                       <Mic className="text-blue-400" />
+                    )}
+                    <span className="text-sm font-medium">{isListening ? 'Stop Recording' : 'Voice Note'}</span>
                  </button>
                </div>
             </div>
@@ -178,8 +280,8 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
              <Loader2 className="animate-spin mr-2" /> Analyzing...
            </Button>
         ) : !analysis ? (
-          <Button onClick={handleAnalyze} fullWidth disabled={!input}>
-            Create Task
+          <Button onClick={handleAnalyze} fullWidth disabled={!input && !selectedImage}>
+            {input || selectedImage ? "Analyze" : "Describe Task"}
           </Button>
         ) : (
           <Button onClick={handleCreate} fullWidth icon={Sparkles} disabled={isAuthenticating}>
