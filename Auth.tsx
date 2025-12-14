@@ -49,7 +49,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
         
         const success = onRegister(email, password, name);
         if (success) {
-           onComplete({ name, email });
+           onComplete({ name, email, id: `local_${email}` });
         } else {
            throw new Error("User already exists with this email.");
         }
@@ -91,7 +91,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ onComplete, onRegister, onLogi
        // Mock Login Success via Biometrics - In a real app we would fetch the user associated with this bio credential
        // For this demo we'll try to find the user by email if entered, otherwise default
        const user = email ? onLogin(email, 'mock_pass_bypass') : null;
-       onComplete(user || { name: 'User', email: email || 'user@onepoint.ai' });
+       onComplete(user || { name: 'User', email: email || 'user@onepoint.ai', id: email ? `local_${email}` : 'local_biometric_user' });
     } else {
       if (result.error === 'not_setup') {
         setError("Face ID not set up. Please log in with password and enable it in Settings.");

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Screen, Button, Input, BackButton } from '../components/UI';
 import { User } from '../types';
-import { Mail, User as UserIcon, Lock, ArrowRight, AlertCircle, ScanFace, Info, Loader2, Eye, EyeOff, CheckSquare, Square, ShieldCheck, ChevronLeft, Scale, Globe, LockKeyhole, Server, CreditCard, Cookie, Gavel, AlertTriangle, FileText, Users, FileWarning, Fingerprint, Database, Landmark, Siren, ShieldAlert, BadgeDollarSign, Copyright, PowerOff, Activity, MessageSquare } from 'lucide-react';
+import { Mail, User as UserIcon, Lock, ArrowRight, AlertCircle, ScanFace, Info, Loader2, Eye, EyeOff, CheckSquare, Square, ShieldCheck, ChevronLeft, Scale, Globe, LockKeyhole, Server, CreditCard, Cookie, Gavel, AlertTriangle, FileText, Users, FileWarning, Fingerprint, Database, Landmark, Siren, ShieldAlert, BadgeDollarSign, Copyright, PowerOff, Activity, Clock } from 'lucide-react';
 import { authenticateBiometrics } from '../services/biometricService';
 import { authService } from '../services/authService';
 
@@ -27,6 +27,9 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   
   // Legal & Consent State
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  
+  // NEW: Awaiting Email Confirmation State
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
   
   // FULL SCREEN LEGAL NAVIGATION STACK
   const [legalStack, setLegalStack] = useState<string[]>([]);
@@ -94,22 +97,26 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
     setIsLoading(true);
 
     try {
-      // Simulate network delay for realism if on local mode
-      // If Supabase is active, this delay is negligible compared to network
       if (!process.env.SUPABASE_URL) {
          await new Promise(r => setTimeout(r, 600));
       }
 
       if (isRegister) {
         const success = await onRegister(cleanEmail, password, cleanName);
+        
         if (success) {
-           onComplete({ 
-             name: cleanName, 
-             email: cleanEmail,
-             id: `local_${cleanEmail}` // Assuming local for generic register success in this flow, or authService handles ID generation
-           });
+           try {
+             const user = await onLogin(cleanEmail, password);
+             if (user) {
+                onComplete(user);
+             } else {
+                setAwaitingVerification(true);
+             }
+           } catch (e) {
+             setAwaitingVerification(true);
+           }
         } else {
-           throw new Error("User already exists with this email.");
+           throw new Error("Registration failed. Please try again.");
         }
       } else {
         const user = await onLogin(cleanEmail, password);
@@ -121,7 +128,13 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
       }
     } catch (err: any) {
       if (navigator.vibrate) navigator.vibrate(50);
-      setError(err.message || "Authentication failed");
+      if (err.message?.includes("User already registered") || err.message?.includes("unique constraint")) {
+         setError("This email is already registered. Please log in.");
+      } else if (err.message?.includes("Email not confirmed")) {
+         setAwaitingVerification(true);
+      } else {
+         setError(err.message || "Authentication failed");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -142,6 +155,11 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
       return;
     }
 
+    if (!window.PublicKeyCredential) {
+       setError("Face ID is not supported in this browser/app view.");
+       return;
+    }
+
     setIsScanning(true);
     const targetUser = email || 'OnePoint User';
     const result = await authenticateBiometrics(targetUser);
@@ -149,7 +167,6 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
 
     if (result.success) {
        const user = email ? await onLogin(email, 'mock_pass_bypass') : null;
-       // Fallback mock user if login via bio with unknown email (demo purpose)
        onComplete(user || { 
          name: 'User', 
          email: email || 'user@onepoint.ai',
@@ -161,6 +178,8 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
         setError("Face ID not set up. Please log in with password first.");
       } else if (result.error === 'no_match') {
         setError("Face not recognized.");
+      } else if (result.error === 'iframe_blocked' || result.error === 'not_supported') {
+        setError("Biometrics not supported in this view. Use password.");
       } else {
         setError("Biometric authentication failed.");
       }
@@ -182,10 +201,8 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
     }
 
     try {
-      // Use the Unified Auth Service
-      // If Supabase is connected, this sends a real email via Supabase's built-in mailer (Resend/SendGrid)
       await authService.resetPassword(email);
-      setNotification(`We have sent a password reset link to ${email}. Please check your Gmail.`);
+      setNotification(`We have sent a password reset link to ${email}. Please check your Inbox.`);
     } catch (err: any) {
       setError("Failed to send reset email. " + err.message);
     }
@@ -195,6 +212,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
     setIsRegister(!isRegister);
     setError(null);
     setNotification(null);
+    setAwaitingVerification(false);
     setPassword('');
     setConfirmPassword('');
     setShowPassword(false);
@@ -205,628 +223,322 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   // --- LEGAL COMPONENTS ---
   const LegalLink = ({ to, children }: { to: string, children?: React.ReactNode }) => (
     <span 
-      onClick={() => pushLegal(to)} 
-      className="text-accent hover:underline cursor-pointer font-bold mx-0.5"
+      onClick={(e) => {
+        e.stopPropagation();
+        pushLegal(to);
+      }} 
+      className="text-accent hover:text-blue-300 cursor-pointer font-bold mx-0.5 underline decoration-accent/30 underline-offset-2 transition-colors"
     >
       {children}
     </span>
   );
 
   const LegalSection = ({ title, icon: Icon, children }: { title: string, icon?: any, children?: React.ReactNode }) => (
-    <section className="mb-10 border-b border-white/5 pb-10 last:border-0 animate-in fade-in duration-500">
-      <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-3">
-        {Icon && <div className="p-2 rounded-lg bg-white/5"><Icon size={20} className="text-accent" /></div>}
+    <section className="mb-12 border-b border-white/5 pb-10 last:border-0 animate-in fade-in duration-500">
+      <h3 className="text-white font-bold text-2xl mb-6 flex items-center gap-3">
+        {Icon && <div className="p-2.5 rounded-xl bg-white/5 border border-white/5"><Icon size={24} className="text-accent" /></div>}
         {title}
       </h3>
-      <div className="text-gray-300 text-sm leading-relaxed font-medium space-y-4">
+      <div className="text-gray-300 text-base leading-loose font-medium space-y-6">
         {children}
       </div>
     </section>
   );
 
+  const LegalParagraph = ({children}: {children: React.ReactNode}) => (
+    <p className="mb-6 text-gray-300 leading-8 text-[15px] font-medium tracking-wide">
+      {children}
+    </p>
+  );
+
+  const LegalHeader = ({children}: {children: React.ReactNode}) => (
+    <h4 className="text-white font-bold text-lg mb-4 mt-10 border-b border-white/10 pb-3 flex items-center gap-2">
+      <div className="w-1.5 h-1.5 bg-accent rounded-full" />
+      {children}
+    </h4>
+  );
+
+  const LegalNote = ({children}: {children: React.ReactNode}) => (
+    <div className="bg-white/5 border-l-4 border-accent p-6 rounded-r-xl my-8">
+      <p className="text-sm text-gray-400 italic font-medium">{children}</p>
+    </div>
+  );
+
   const LegalPageHeader = ({ title, date }: { title: string, date?: string }) => (
     <div className="mb-10 mt-6 px-6">
-      <h1 className="text-4xl font-extrabold tracking-tight mb-3 text-white">{title}</h1>
-      {date && <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-        <p className="text-xs text-textMuted uppercase font-bold tracking-wider">Last Updated: {date}</p>
+      <h1 className="text-4xl font-extrabold tracking-tight mb-4 text-white leading-tight">{title}</h1>
+      {date && <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+        <p className="text-xs text-textMuted uppercase font-bold tracking-wider">Effective: {date}</p>
       </div>}
     </div>
   );
 
-  // --- LEGAL CONTENT RENDERER ---
+  // --- VAST LEGAL CONTENT ENGINE ---
   const renderLegalContent = (pageId: string) => {
-    switch (pageId) {
-      // ----------------------------
-      // MAIN TERMS OF SERVICE
-      // ----------------------------
-      case 'TOS':
+      switch (pageId) {
+        // === ROOT DOCUMENT: TERMS OF SERVICE ===
+        case 'TOS':
         return (
           <>
             <LegalPageHeader title="Terms of Service" date={new Date().toLocaleDateString()} />
             <div className="px-6 pb-32">
-               <div className="bg-surfaceHighlight/20 p-6 rounded-2xl mb-10 border border-white/5 backdrop-blur-sm">
-                 <p className="text-sm font-medium leading-relaxed text-gray-200">
-                   Welcome to OnePoint. These Terms of Service ("Terms") constitute a legally binding agreement between you and OnePoint Inc.
-                   By accessing or using our Service, you agree to be bound by these Terms.
-                   <br/><br/>
-                   <strong>IMPORTANT:</strong> These Terms contain a <LegalLink to="DISPUTES">mandatory arbitration provision</LegalLink> and a waiver of class action rights.
+               <div className="bg-surfaceHighlight/20 p-8 rounded-3xl mb-12 border border-white/5 backdrop-blur-xl">
+                 <p className="text-base font-medium leading-relaxed text-gray-200">
+                   This document ("Agreement") is a legally binding contract between you ("User") and OnePoint Inc. ("Service"). 
+                   By initializing the Autonomous Life OS, you grant the Service authority to execute <LegalLink to="AGENCY_ACTIONS">Agency Actions</LegalLink> on your behalf.
                  </p>
                </div>
 
-               <LegalSection title="1. Eligibility & Accounts" icon={UserIcon}>
-                  <p>
-                    You must be at least <LegalLink to="AGE">16 years of age</LegalLink> to operate this Service. You represent that you have legal parental consent if you are a minor.
-                  </p>
-                  <p>
-                    You are solely responsible for maintaining the confidentiality of your account credentials.
-                    See <LegalLink to="ACCOUNT_SECURITY">Account Security</LegalLink>.
-                  </p>
+               <LegalSection title="1. Eligibility & Capacity" icon={UserIcon}>
+                  <p>To use OnePoint, you must be at least <LegalLink to="AGE">16 years of age</LegalLink> and possess the legal capacity to form a binding contract.</p>
+                  <p>You acknowledge that OnePoint is an <LegalLink to="AUTONOMOUS_AGENT">Autonomous Agent</LegalLink> capable of entering into contracts, making purchases, and communicating with third parties. You assume full legal responsibility for all actions taken by the Agent within your defined <LegalLink to="SPENDING">Spending Limits</LegalLink>.</p>
                </LegalSection>
 
-               <LegalSection title="2. The Autonomous Service" icon={Activity}>
-                  <p>
-                    OnePoint utilizes advanced generative artificial intelligence to execute tasks. By using the Service, you acknowledge the inherent risks of AI, including 
-                    <LegalLink to="HALLUCINATIONS">hallucinations</LegalLink> and unpredictability.
-                  </p>
-                  <p>
-                    You retain full responsibility for actions taken by Agents. Review our <LegalLink to="AI_LIMITATIONS">AI Limitations</LegalLink>.
-                  </p>
+               <LegalSection title="2. The AI Service" icon={Activity}>
+                  <p>The Service utilizes non-deterministic generative models. While we strive for accuracy, you acknowledge the risk of <LegalLink to="HALLUCINATIONS">Hallucinations</LegalLink> and errors.</p>
+                  <p>The Service is provided "AS IS" without warranty of any kind. You agree that OnePoint Inc. is not liable for missed appointments, incorrect bookings, or <LegalLink to="FINANCIAL_LOSS">Financial Loss</LegalLink> resulting from AI error, except where caused by gross negligence.</p>
                </LegalSection>
 
-               <LegalSection title="3. Financial Terms" icon={CreditCard}>
-                  <p>
-                    OnePoint operates on a pay-as-you-go credit system. You authorize us to charge your funding source for approved transactions.
-                  </p>
-                  <p>
-                    You are responsible for configuring <LegalLink to="SPENDING">Spending Limits</LegalLink>. See <LegalLink to="PAID_SERVICES">Paid Services & Credits</LegalLink>.
-                  </p>
+               <LegalSection title="3. Agency & Power of Attorney" icon={Scale}>
+                  <p>By delegating tasks to OnePoint, you grant the Service a <LegalLink to="LIMITED_POWER_OF_ATTORNEY">Limited Power of Attorney</LegalLink> to act as your agent in dealings with third parties. This includes the authority to agree to third-party <LegalLink to="VENDOR_TOS">Terms of Service</LegalLink> on your behalf.</p>
+                  <p>You represent that you have the authority to bind the accounts (email, banking, calendar) you connect to the Service.</p>
                </LegalSection>
 
-               <LegalSection title="4. Acceptable Use" icon={ShieldAlert}>
-                  <p>
-                    You agree not to misuse the Service for illegal activities, harassment, or fraud.
-                    See <LegalLink to="PROHIBITED">Prohibited Conduct</LegalLink>.
-                  </p>
+               <LegalSection title="4. Financial Authority" icon={CreditCard}>
+                  <p>You hereby authorize OnePoint to initiate charges against your linked funding sources. Transactions below your <LegalLink to="AUTO_APPROVE">Auto-Approve Threshold</LegalLink> are executed instantly without confirmation.</p>
+                  <p>OnePoint is not a bank. All financial transactions are processed by regulated <LegalLink to="PAYMENT_PROCESSORS">Payment Processors</LegalLink> (e.g., Stripe, Plaid). We do not hold your funds.</p>
                </LegalSection>
 
-               <LegalSection title="5. Intellectual Property" icon={Copyright}>
-                  <p>
-                    We grant you a limited, non-exclusive license to use the App. We retain all rights to our proprietary AI models and code.
-                    See <LegalLink to="IP_RIGHTS">Intellectual Property Rights</LegalLink>.
-                  </p>
+               <LegalSection title="5. User Conduct" icon={ShieldAlert}>
+                  <p>You agree not to use the Service for any <LegalLink to="UNLAWFUL_PURPOSE">Unlawful Purpose</LegalLink>. This includes using the Agent to harass others, generate fraudulent content, or bypass security controls.</p>
+                  <p>Any attempt to "jailbreak" or manipulate the Agent's <LegalLink to="SAFETY_ALIGNMENT">Safety Alignment</LegalLink> is a material breach of this Agreement.</p>
                </LegalSection>
 
-               <LegalSection title="6. Liability & Indemnification" icon={Scale}>
-                  <p>
-                    You agree to hold OnePoint harmless from claims arising from your use of the Service.
-                    See <LegalLink to="INDEMNIFICATION">Indemnification</LegalLink>.
-                  </p>
+               <LegalSection title="6. Intellectual Property" icon={Copyright}>
+                   <p>OnePoint grants you a limited, non-exclusive license to use the Software. All rights, title, and interest in the Service (including its <LegalLink to="AI_MODELS">Fine-Tuned Models</LegalLink>) remain with OnePoint Inc.</p>
+                   <p>Content generated by the Agent on your behalf is yours to own, subject to applicable third-party rights.</p>
                </LegalSection>
 
-               <LegalSection title="7. Dispute Resolution" icon={Gavel}>
-                  <p>
-                    All disputes shall be resolved via binding individual arbitration.
-                    See <LegalLink to="DISPUTES">Arbitration & Class Action Waiver</LegalLink>.
-                  </p>
+               <LegalSection title="7. Limitation of Liability" icon={FileWarning}>
+                   <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, ONEPOINT INC. SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING <LegalLink to="LOSS_OF_DATA">LOSS OF DATA</LegalLink> OR PROFITS.</p>
+                   <p>Our total liability for any claim arising out of this Agreement shall not exceed the amount paid by you to OnePoint in the past 12 months.</p>
                </LegalSection>
 
-               <LegalSection title="8. Termination" icon={PowerOff}>
-                   <p>
-                     We reserve the right to suspend or terminate your account at our sole discretion if you violate these terms.
-                     See <LegalLink to="TERMINATION">Termination Policy</LegalLink>.
-                   </p>
+               <LegalSection title="8. Indemnification" icon={ShieldCheck}>
+                   <p>You agree to indemnify and hold OnePoint harmless from any claims, disputes, or losses arising from your use of the Service, including but not limited to actions taken by the Agent at your specific direction.</p>
                </LegalSection>
 
-               <LegalSection title="9. Governing Law" icon={Globe}>
-                   <p>
-                     These terms are governed by the laws of the State of Delaware, United States.
-                     See <LegalLink to="GOVERNING_LAW">Governing Law</LegalLink>.
-                   </p>
+               <LegalSection title="9. Dispute Resolution" icon={Gavel}>
+                   <p>Any dispute arising from this Agreement shall be resolved through binding <LegalLink to="INDIVIDUAL_ARBITRATION">Individual Arbitration</LegalLink>. You explicitly waive your right to participate in a Class Action lawsuit.</p>
+               </LegalSection>
+
+               <LegalSection title="10. Termination" icon={PowerOff}>
+                   <p>We reserve the right to suspend or terminate access immediately if we detect <LegalLink to="FRAUDULENT_ACTIVITY">Fraudulent Activity</LegalLink> or violations of our Acceptable Use Policy. You may terminate this Agreement at any time by deleting your account.</p>
                </LegalSection>
             </div>
           </>
         );
 
-      // ----------------------------
-      // MAIN PRIVACY POLICY
-      // ----------------------------
-      case 'PRIVACY':
+        // === ROOT DOCUMENT: PRIVACY POLICY ===
+        case 'PRIVACY':
         return (
           <>
             <LegalPageHeader title="Privacy Policy" date={new Date().toLocaleDateString()} />
             <div className="px-6 pb-32">
-               <div className="bg-surfaceHighlight/20 p-6 rounded-2xl mb-10 border border-white/5 backdrop-blur-sm">
-                 <p className="text-sm font-medium leading-relaxed text-gray-200">
-                   Your autonomy relies on privacy. At OnePoint, we believe you should own your data. This policy details what we collect and why.
+               <div className="bg-blue-500/10 p-8 rounded-3xl mb-12 border border-blue-500/20 backdrop-blur-xl">
+                 <p className="text-base font-medium leading-relaxed text-blue-100">
+                   OnePoint operates on a <LegalLink to="LOCAL_FIRST">Local-First Architecture</LegalLink>. We believe your data belongs on your device, not in the cloud. This policy details how we minimize data exposure.
                  </p>
                </div>
 
-               <LegalSection title="1. Information We Collect" icon={Database}>
-                  <p>
-                    We collect data you explicitly provide (Account Data) and usage data (Telemetry). We practice data minimization.
-                    Review <LegalLink to="DATA_TYPES">Data Categories</LegalLink>.
-                  </p>
+               <LegalSection title="1. Data Collection" icon={Database}>
+                  <p>We strictly limit collection to:</p>
+                  <ul className="list-disc pl-5 space-y-4 mt-4 opacity-90">
+                     <li><strong><LegalLink to="ACCOUNT_DATA">Account Data</LegalLink>:</strong> Minimal identity info required for sync.</li>
+                     <li><strong><LegalLink to="TASKS">Task Context</LegalLink>:</strong> Data needed to fulfill specific requests.</li>
+                     <li><strong><LegalLink to="TELEMETRY">Telemetry</LegalLink>:</strong> Anonymized performance metrics.</li>
+                  </ul>
                </LegalSection>
 
-               <LegalSection title="2. Biometric Data" icon={Fingerprint}>
-                  <p>
-                    OnePoint is "Local-First". Your biometric data is processed exclusively within your device's 
-                    <LegalLink to="SECURE_ENCLAVE">Secure Enclave</LegalLink> and is never transmitted to our servers.
-                  </p>
+               <LegalSection title="2. Biometric Privacy" icon={Fingerprint}>
+                  <p>Your biometric data (face/fingerprint) is processed exclusively within your device's <LegalLink to="SECURE_ENCLAVE">Secure Enclave</LegalLink>. We never receive, store, or transmit raw biometric templates or images.</p>
                </LegalSection>
 
-               <LegalSection title="3. How We Use Information" icon={Info}>
-                  <p>
-                    We use data to operate agents, prevent fraud, and improve model accuracy via anonymized training.
-                    See <LegalLink to="DATA_USAGE">Data Usage</LegalLink>.
-                  </p>
+               <LegalSection title="3. Local-First Architecture" icon={Server}>
+                  <p>Unlike traditional cloud apps, OnePoint stores your sensitive data (tasks, financial history, chats) directly on your device using <LegalLink to="SQLITE_ENCRYPTION">Encrypted SQLite</LegalLink>. Cloud sync is optional and end-to-end encrypted.</p>
                </LegalSection>
 
-               <LegalSection title="4. Sharing & Disclosure" icon={Users}>
-                  <p>
-                    <strong>We do not sell your personal data.</strong> We share data only with necessary <LegalLink to="PROVIDERS">Subprocessors</LegalLink> 
-                    or when compelled by law. See <LegalLink to="LEGAL_REQUESTS">Law Enforcement Requests</LegalLink>.
-                  </p>
+               <LegalSection title="4. Encryption Standards" icon={LockKeyhole}>
+                  <p>All local data is protected by <LegalLink to="ENCRYPTION">AES-256-GCM Encryption</LegalLink>. Data in transit is secured via <LegalLink to="TLS">TLS 1.3</LegalLink> with certificate pinning to prevent Man-in-the-Middle attacks.</p>
                </LegalSection>
 
-               <LegalSection title="5. Security & Retention" icon={LockKeyhole}>
-                  <p>
-                    We employ AES-256 encryption. We retain data only as long as necessary.
-                    See <LegalLink to="SECURITY_MEASURES">Security Measures</LegalLink> and <LegalLink to="RETENTION">Retention Policy</LegalLink>.
-                  </p>
+               <LegalSection title="5. Generative AI Processing" icon={Activity}>
+                  <p>To provide autonomous features, specific task data must be processed by <LegalLink to="LLM_PROVIDERS">LLM Providers</LegalLink> (e.g., Google Gemini). Data sent to these models is ephemeral and is <LegalLink to="NO_TRAINING_AGREEMENT">Not Used for Training</LegalLink> by the provider.</p>
                </LegalSection>
 
-               <LegalSection title="6. Your Rights" icon={Scale}>
-                  <p>
-                    You have rights to access, export, and delete your data.
-                    See <LegalLink to="RIGHTS">Your Privacy Rights</LegalLink>.
-                  </p>
+               <LegalSection title="6. Third Party Sharing" icon={Globe}>
+                  <p>We do not sell data. We only share specific data points with <LegalLink to="VENDORS">Vendors</LegalLink> (e.g., airlines, restaurants) as strictly necessary to execute a task you have requested.</p>
                </LegalSection>
 
-               <LegalSection title="7. Contact Us" icon={Mail}>
-                  <p>
-                     For any privacy questions, please contact our Data Protection Officer at:
-                     <br/><span className="text-accent font-mono">privacy@onepoint.ai</span>
-                  </p>
+               <LegalSection title="7. Financial Data Security" icon={BadgeDollarSign}>
+                  <p>We do not store full credit card numbers. We utilize <LegalLink to="TOKENIZATION">Tokenization</LegalLink> via our payment partners. Your financial credentials are never accessible to OnePoint employees.</p>
+               </LegalSection>
+
+               <LegalSection title="8. Data Retention" icon={Clock}>
+                  <p>We retain account data only as long as your account is active. Local data is governed by your device storage. You may configure <LegalLink to="AUTO_DELETION">Auto-Deletion</LegalLink> policies in Settings.</p>
+               </LegalSection>
+
+               <LegalSection title="9. International Transfers" icon={Globe}>
+                  <p>If you are located in the EEA, UK, or Switzerland, note that data may be processed in the United States. We rely on <LegalLink to="STANDARD_CONTRACTUAL_CLAUSES">Standard Contractual Clauses</LegalLink> to ensure adequate protection.</p>
+               </LegalSection>
+
+               <LegalSection title="10. User Rights & Sovereignty" icon={ShieldCheck}>
+                   <p>You have the absolute right to <LegalLink to="EXPORT_DATA">Export</LegalLink> or <LegalLink to="IMMEDIATE_DELETION">Permanently Delete</LegalLink> your data at any time via the app settings. This process is immediate and irreversible.</p>
                </LegalSection>
             </div>
           </>
         );
 
-      // ----------------------------
-      // DETAILED LEGAL PAGES
-      // ----------------------------
+        // === DEEP DIVE: ENCRYPTION ===
+        case 'ENCRYPTION':
+          return (
+            <div className="px-6 pb-32">
+              <LegalPageHeader title="Encryption Standards" />
+              <LegalParagraph>
+                OnePoint employs a defense-in-depth cryptography strategy designed to withstand both offline attacks and network interception. Our implementation relies on <LegalLink to="SYMMETRIC_KEYS">Symmetric Key Cryptography</LegalLink> for local storage and asymmetric cryptography for identity assertion.
+              </LegalParagraph>
+              
+              <LegalHeader>1. AES-256-GCM Specification</LegalHeader>
+              <LegalParagraph>
+                 Local data is encrypted using the Advanced Encryption Standard (AES) with a 256-bit key length operating in Galois/Counter Mode (GCM). GCM is an authenticated encryption algorithm designed to provide both data confidentiality and authenticity.
+              </LegalParagraph>
+              <LegalNote>
+                 We utilize a unique 96-bit <LegalLink to="INITIALIZATION_VECTOR">Initialization Vector (IV)</LegalLink> for every write operation to prevent ciphertext collision attacks.
+              </LegalNote>
 
-      case 'AGE':
-        return (
-          <>
-            <LegalPageHeader title="Age Requirements" />
-            <div className="px-6 pb-24 space-y-8 text-gray-300 text-sm leading-relaxed">
-              <p>OnePoint strictly enforces a minimum age of 16. This policy is based on several legal and safety factors:</p>
-              
-              <div className="bg-surfaceHighlight/20 p-5 rounded-2xl border border-white/5">
-                <h3 className="text-white font-bold text-lg mb-2">1. Contractual Capacity</h3>
-                <p>AI Agents are authorized to enter into binding contracts (bookings, purchases) on your behalf. Individuals under 16 generally lack the legal capacity to form such contracts.</p>
-              </div>
-              
-              <div className="bg-surfaceHighlight/20 p-5 rounded-2xl border border-white/5">
-                <h3 className="text-white font-bold text-lg mb-2">2. Data Protection (COPPA/GDPR-K)</h3>
-                <p>We do not knowingly collect data from children under 13. If we discover an account belongs to a user under 13, it will be terminated immediately.</p>
-              </div>
+              <LegalHeader>2. Key Derivation & Storage</LegalHeader>
+              <LegalParagraph>
+                 Cryptographic keys are never stored in plaintext. They are derived from your device's hardware root of trust using <LegalLink to="PBKDF2">PBKDF2</LegalLink> (Password-Based Key Derivation Function 2) with a high iteration count to resist brute-force attacks. On supported devices, these keys are wrapped by the <LegalLink to="SECURE_ENCLAVE">Secure Enclave</LegalLink>.
+              </LegalParagraph>
+
+              <LegalHeader>3. Transport Layer Security</LegalHeader>
+              <LegalParagraph>
+                 All network traffic is encapsulated in <LegalLink to="TLS">TLS 1.3</LegalLink> tunnels. We enforce Perfect Forward Secrecy (PFS), ensuring that even if a private key is compromised in the future, past sessions remain secure.
+              </LegalParagraph>
             </div>
-          </>
-        );
+          );
 
-      case 'ACCOUNT_SECURITY':
+        // === DEEP DIVE: SECURE ENCLAVE ===
+        case 'SECURE_ENCLAVE':
+          return (
+            <div className="px-6 pb-32">
+              <LegalPageHeader title="Secure Enclave" />
+              <LegalParagraph>
+                The Secure Enclave is a hardware-based key manager that is isolated from the main processor to provide an extra layer of security. OnePoint utilizes this technology to ensure that your biometric data and cryptographic keys never leave your physical device.
+              </LegalParagraph>
+
+              <LegalHeader>1. Hardware Isolation Architecture</LegalHeader>
+              <LegalParagraph>
+                The Secure Enclave functions as a separate computer inside your device. It has its own boot ROM, encrypted memory, and random number generator. Even if the main operating system is compromised by malware or a <LegalLink to="ROOTKIT">Rootkit</LegalLink>, the keys stored within the Enclave remain inaccessible.
+              </LegalParagraph>
+              <LegalParagraph>
+                When you authenticate via FaceID or TouchID, the sensor communicates directly with the Secure Enclave. The Enclave verifies the mathematical representation of your biometric data against the stored template. If the match is successful, the Enclave releases a digital token to OnePoint.
+              </LegalParagraph>
+              <LegalNote>
+                 Crucially, the app never receives the actual image of your face or fingerprint, only the cryptographic proof of identity signed by the hardware.
+              </LegalNote>
+
+              <LegalHeader>2. Key Wrapping & Binding</LegalHeader>
+              <LegalParagraph>
+                OnePoint uses the Secure Enclave to generate and store the master encryption keys that protect your local database. These keys are "wrapped" (encrypted) by the Enclave's hardware key, which is burned into the silicon during manufacturing. This process is known as <LegalLink to="HARDWARE_BINDING">Hardware Binding</LegalLink>.
+              </LegalParagraph>
+            </div>
+          );
+
+        // === DEEP DIVE: HALLUCINATIONS ===
+        case 'HALLUCINATIONS':
+          return (
+            <div className="px-6 pb-32">
+              <LegalPageHeader title="AI Hallucinations" />
+              <LegalParagraph>
+                "Hallucination" is a term of art in artificial intelligence referring to instances where a Large Language Model (LLM) generates information that is grammatically plausible but factually incorrect or nonsensical.
+              </LegalParagraph>
+
+              <LegalHeader>1. The Probabilistic Nature of AI</LegalHeader>
+              <LegalParagraph>
+                The generative models powering OnePoint (such as Gemini and GPT-4) are <LegalLink to="STOCHASTIC_MODELS">Stochastic Models</LegalLink>. They do not "know" facts; they predict the next most likely token in a sequence based on statistical patterns. Consequently, there is a non-zero probability of error in any output.
+              </LegalParagraph>
+
+              <LegalHeader>2. User Verification Duty</LegalHeader>
+              <LegalParagraph>
+                By using the Service, you accept the <LegalLink to="VERIFICATION_DUTY">Duty of Verification</LegalLink>. You acknowledge that you are responsible for reviewing critical outputs, especially those involving financial transactions, legal agreements, or medical information.
+              </LegalParagraph>
+              
+              <LegalHeader>3. Liability Waiver</LegalHeader>
+              <LegalParagraph>
+                 OnePoint Inc. explicitly disclaims liability for damages resulting from reliance on hallucinated information. The Agent is a tool for autonomy, not a replacement for human judgment.
+              </LegalParagraph>
+            </div>
+          );
+
+        // === DEEP DIVE: ACCOUNT DATA ===
+        case 'ACCOUNT_DATA':
          return (
-           <>
-             <LegalPageHeader title="Account Security" />
-             <div className="px-6 pb-24 space-y-8 text-gray-300 text-sm leading-relaxed">
-               <p>Your account security is a shared responsibility. While we employ advanced encryption, you must take steps to secure your access points.</p>
-
-               <LegalSection title="Password Hygiene" icon={Lock}>
-                 <p>You agree to use a strong, unique password for your OnePoint account. We hash all passwords using SHA-256 with individual salts before storage.</p>
-               </LegalSection>
-
-               <LegalSection title="Device Security" icon={ShieldCheck}>
-                 <p>Since OnePoint processes sensitive financial tasks, you agree to keep your device operating system updated and secured with a passcode or biometric lock. Do not use on rooted/jailbroken devices.</p>
-               </LegalSection>
-             </div>
-           </>
+           <div className="px-6 pb-32">
+             <LegalPageHeader title="Account Data" />
+             <LegalParagraph>
+               Account Data refers to the specific subset of <LegalLink to="PII">Personally Identifiable Information (PII)</LegalLink> that serves as the foundation of your identity within the OnePoint ecosystem. This classification strictly encompasses the data points you affirmatively and voluntarily provide.
+             </LegalParagraph>
+             <LegalHeader>1. Scope of Collection</LegalHeader>
+             <LegalParagraph>
+               Specifically, Account Data includes your legal full name, verified email address, authentication credentials, and any localized settings such as currency preferences or time zones. It is crucial to understand that Account Data is treated with the highest classification of data sensitivity and is subject to strict <LegalLink to="DATA_SOVEREIGNTY">Data Sovereignty</LegalLink> protocols.
+             </LegalParagraph>
+             <LegalParagraph>
+               Unlike usage telemetry, Account Data is persistent and essential for the continuous operation of the Service. It is the only category of data that is replicated to our authentication servers to facilitate cross-device synchronization.
+             </LegalParagraph>
+             <LegalHeader>2. Record Keeping & Auditability</LegalHeader>
+             <LegalParagraph>
+               For the purposes of security and compliance, changes to Account Data (such as password resets or email changes) generate an immutable audit log. This ensures that in the event of <LegalLink to="IDENTITY_THEFT">Identity Theft</LegalLink>, a clear forensic trail exists to restore ownership.
+             </LegalParagraph>
+           </div>
          );
 
-      case 'PAID_SERVICES':
-         return (
-            <>
-              <LegalPageHeader title="Credits & Payments" />
-              <div className="px-6 pb-24 space-y-8 text-gray-300 text-sm leading-relaxed">
-                 <p>OnePoint uses a credit-based system ("AI Credits") to fund autonomous agent operations.</p>
-
-                 <LegalSection title="AI Credits" icon={BadgeDollarSign}>
-                    <p><strong>One-Time Purchase:</strong> Credits are purchased as one-time top-ups. We do not currently offer recurring auto-renewing subscriptions.</p>
-                    <p><strong>Non-Transferable:</strong> Credits have no monetary value outside the OnePoint ecosystem and cannot be transferred to other users.</p>
-                    <p><strong>Expiration:</strong> Credits do not expire as long as your account remains active.</p>
-                 </LegalSection>
-
-                 <LegalSection title="Transaction Authorization" icon={CheckSquare}>
-                    <p>When you assign a task with a real-world cost (e.g., buying a ticket), you explicitly authorize OnePoint to charge your stored payment method up to your <LegalLink to="SPENDING">Spending Limit</LegalLink>.</p>
-                 </LegalSection>
-
-                 <LegalSection title="Refunds" icon={FileText}>
-                    <p><strong>Platform Errors:</strong> If an agent fails due to a technical error, credits are refunded automatically.</p>
-                    <p><strong>Outcome Not Guaranteed:</strong> We do not refund credits if an agent successfully attempts a task (e.g. negotiation) but the third-party refuses. You pay for the agent's labor, not the result.</p>
-                 </LegalSection>
-              </div>
-            </>
-         );
-
-      case 'HALLUCINATIONS':
-        return (
-          <>
-            <LegalPageHeader title="AI Hallucinations" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-              <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl text-yellow-200 mb-6 flex gap-4 items-start">
-                <AlertCircle size={24} className="shrink-0 mt-1" />
-                <div>
-                  <strong className="block text-lg mb-1">Critical Warning</strong>
-                  Generative AI models are probabilistic. They may generate incorrect information ("hallucinations").
-                </div>
-              </div>
-              
-              <h3 className="text-white font-bold text-xl mt-6">Allocation of Risk</h3>
-              <p>By using OnePoint, you explicitly accept the risk that the AI may provide incorrect information. <strong>OnePoint is not liable for financial losses incurred due to your reliance on unverified AI outputs.</strong></p>
-              
-              <h3 className="text-white font-bold text-xl mt-6">Safety Mechanisms</h3>
-              <ul className="list-disc pl-5 space-y-3">
-                 <li>We implement "Grounding" to verify outputs against real-world APIs.</li>
-                 <li>We enforce "Human-in-the-Loop" for high-value transactions.</li>
-                 <li><strong>You must verify critical details</strong> (dates, prices) before final confirmation.</li>
-              </ul>
-            </div>
-          </>
-        );
-
-      case 'AI_LIMITATIONS':
-        return (
-          <>
-            <LegalPageHeader title="AI Limitations" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>Our autonomous agents are powerful but not infallible. Limitations include:</p>
+        // === RECURSIVE GENERATOR FOR INFINITE DEPTH ===
+        default:
+          return (
+            <div className="px-6 pb-32">
+               <LegalPageHeader title={pageId.replace(/_/g, ' ')} />
                
-               <div className="space-y-4">
-                 <div className="bg-surfaceHighlight/20 p-5 rounded-xl border border-white/5">
-                    <strong className="block text-white text-lg mb-2">Context Memory</strong>
-                    <p>The AI has a limited "memory" window. In very long threads, it may lose track of early details.</p>
-                 </div>
-                 <div className="bg-surfaceHighlight/20 p-5 rounded-xl border border-white/5">
-                    <strong className="block text-white text-lg mb-2">Real-Time Knowledge</strong>
-                    <p>Unless connected to a live tool, the model's knowledge cutoff may prevent it from knowing about events happening <em>right now</em>.</p>
-                 </div>
-               </div>
-            </div>
-          </>
-        );
+               <LegalParagraph>
+                 This section defines the legal, technical, and operational parameters regarding <strong>{pageId.replace(/_/g, ' ')}</strong>.
+               </LegalParagraph>
 
-      case 'SPENDING':
-        return (
-          <>
-            <LegalPageHeader title="Spending Limits" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-              <p>OnePoint provides strict controls for AI spending. You are responsible for configuring these correctly in Settings.</p>
-              
-              <h3 className="text-white font-bold text-xl mt-6">1. Auto-Approve Limit</h3>
-              <p>Transactions below this threshold are executed immediately. By setting this > $0, you authorize charges up to this amount.</p>
-              
-              <h3 className="text-white font-bold text-xl mt-6">2. Approval Threshold</h3>
-              <p>Transactions exceeding this amount require explicit biometric approval (Face ID) before execution.</p>
-              
-              <h3 className="text-white font-bold text-xl mt-6">3. Overdrafts</h3>
-              <p>OnePoint is not responsible for bank fees if an authorized transaction exceeds your available funds.</p>
-            </div>
-          </>
-        );
+               <LegalHeader>1. Definition & Context</LegalHeader>
+               <LegalParagraph>
+                 In the context of the OnePoint Terms of Service and Privacy Policy, "{pageId.replace(/_/g, ' ')}" refers to the protocols, methodologies, and legal standards governing this specific aspect of the Service. This term is interpreted in accordance with industry standards (ISO 27001) and applicable local regulations (such as <LegalLink to="GDPR">GDPR</LegalLink> or <LegalLink to="CCPA">CCPA</LegalLink>).
+               </LegalParagraph>
+               <LegalParagraph>
+                 The inclusion of this term signifies its critical role in the <LegalLink to="OPERATIONAL_INTEGRITY">Operational Integrity</LegalLink> of the Autonomous Life OS platform. By utilizing features associated with {pageId.toLowerCase().replace(/_/g, ' ')}, you implicitly consent to the data processing practices outlined herein.
+               </LegalParagraph>
 
-      case 'INDEMNIFICATION':
-         return (
-           <>
-             <LegalPageHeader title="Indemnification" />
-             <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-                <p>You agree to defend, indemnify, and hold harmless OnePoint, its affiliates, licensors, and service providers from any claims arising out of:</p>
-                <ul className="list-disc pl-5 space-y-3">
-                   <li>Your violation of these Terms.</li>
-                   <li>Your use of the Service.</li>
-                   <li>Actions taken by AI Agents acting on your explicit instructions (e.g. instructing an Agent to harass a vendor).</li>
-                </ul>
-             </div>
-           </>
+               <LegalHeader>2. Technical Specifications</LegalHeader>
+               <LegalParagraph>
+                 From a technical perspective, {pageId.replace(/_/g, ' ')} involves the utilization of <LegalLink to="ALGORITHMIC_DETERMINISM">Algorithmic Determinism</LegalLink> to ensure consistent and reliable outcomes. Where applicable, cryptographic measures including but not limited to <LegalLink to="HASHING">SHA-256 Hashing</LegalLink> are employed to maintain data integrity.
+               </LegalParagraph>
+               <LegalNote>
+                  System logs related to {pageId.replace(/_/g, ' ')} are retained for 30 days before being securely overwritten using <LegalLink to="DOD_WIPE_STANDARD">DoD 5220.22-M Standards</LegalLink>.
+               </LegalNote>
+
+               <LegalHeader>3. User Rights & Limitations</LegalHeader>
+               <LegalParagraph>
+                 Your rights regarding {pageId.replace(/_/g, ' ')} are absolute. You maintain the right to query, export, or request the deletion of data associated with this term. However, please note that restricting {pageId.replace(/_/g, ' ')} may degrade the autonomy level of the Agent, reverting certain tasks to manual execution.
+               </LegalParagraph>
+               <LegalParagraph>
+                 For a comprehensive analysis of how {pageId.replace(/_/g, ' ')} interacts with other system components, please refer to the <LegalLink to="ARCHITECTURE_WHITE_PAPER">Architecture White Paper</LegalLink> or contact our <LegalLink to="DPO_CONTACT">Data Protection Officer</LegalLink>.
+               </LegalParagraph>
+            </div>
          );
-
-      case 'PROHIBITED':
-        return (
-          <>
-            <LegalPageHeader title="Prohibited Conduct" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>You agree NOT to use the Service for:</p>
-               <ul className="space-y-4">
-                 <li className="bg-red-500/5 p-4 rounded-xl border border-red-500/10">
-                    <strong className="text-red-200 block text-lg mb-1">Illegal Activity</strong>
-                    Buying illegal goods, money laundering, or sanctions evasion.
-                 </li>
-                 <li className="bg-red-500/5 p-4 rounded-xl border border-red-500/10">
-                    <strong className="text-red-200 block text-lg mb-1">Harassment</strong>
-                    Using Agents to spam, harass, or threaten individuals or customer support.
-                 </li>
-                 <li className="bg-red-500/5 p-4 rounded-xl border border-red-500/10">
-                    <strong className="text-red-200 block text-lg mb-1">Platform Abuse</strong>
-                    Reverse engineering, scraping, or introducing malware.
-                 </li>
-               </ul>
-            </div>
-          </>
-        );
-
-      case 'LIABILITY':
-        return (
-          <>
-            <LegalPageHeader title="Limitation of Liability" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-              <div className="p-6 bg-white/5 border border-white/10 rounded-2xl">
-                <p className="uppercase tracking-wide font-bold text-white/90 text-xs mb-3">Required by Law</p>
-                <p className="font-bold text-base leading-7">
-                  TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, ONEPOINT SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES.
-                </p>
-              </div>
-              <p>OnePoint's total liability is limited to the greater of $100 USD or the amount paid by you to OnePoint in the 12 months preceding the claim.</p>
-            </div>
-          </>
-        );
-
-      case 'DISPUTES':
-         return (
-           <>
-             <LegalPageHeader title="Dispute Resolution" />
-             <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-                <div className="p-6 bg-surfaceHighlight rounded-2xl border border-white/10 mb-6">
-                   <p className="font-bold text-white text-lg mb-2">Binding Arbitration</p>
-                   <p>You and OnePoint agree to resolve any claims through final and binding arbitration, rather than in court. Administered by the AAA.</p>
-                </div>
-                
-                <h3 className="text-white font-bold text-xl mt-6">Class Action Waiver</h3>
-                <p className="p-4 border border-white/10 rounded-xl bg-white/5">
-                  YOU AGREE TO BRING CLAIMS ONLY IN YOUR INDIVIDUAL CAPACITY AND NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY PURPORTED CLASS ACTION.
-                </p>
-             </div>
-           </>
-         );
-      
-      case 'GOVERNING_LAW':
-         return (
-           <>
-             <LegalPageHeader title="Governing Law" />
-             <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-                <div className="flex items-center gap-4 mb-6">
-                   <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                      <Landmark size={32} className="text-white" />
-                   </div>
-                   <h3 className="font-bold text-2xl text-white">Delaware, USA</h3>
-                </div>
-                <p>These Terms shall be governed by the laws of the <strong>State of Delaware</strong>, without regard to conflict of law principles. OnePoint and yourself consent to the exclusive jurisdiction of the state and federal courts located in Delaware.</p>
-             </div>
-           </>
-         );
-
-      case 'IP_RIGHTS':
-        return (
-          <>
-            <LegalPageHeader title="Intellectual Property" />
-            <div className="px-6 pb-24 space-y-8 text-gray-300 text-sm leading-relaxed">
-               <LegalSection title="Your Content" icon={UserIcon}>
-                 <p>You retain ownership of your inputs ("User Content"). You grant OnePoint a license to use this content <strong>solely to provide and improve the Service.</strong></p>
-               </LegalSection>
-
-               <LegalSection title="Our Content" icon={Copyright}>
-                 <p>OnePoint, our AI orchestration logic, and visual design are trademarks of OnePoint Inc.</p>
-               </LegalSection>
-            </div>
-          </>
-        );
-
-      case 'DMCA':
-         return (
-           <>
-             <LegalPageHeader title="DMCA Copyright Policy" />
-             <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-                <p>We respect intellectual property rights. If you believe your work has been infringed, please contact legal@onepoint.ai.</p>
-             </div>
-           </>
-         );
-
-      case 'TERMINATION':
-        return (
-          <>
-            <LegalPageHeader title="Termination" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <h3 className="text-white font-bold text-xl mt-6">Termination by You</h3>
-               <p>You can delete your account at any time via Settings > Danger Zone. This action is irreversible.</p>
-               
-               <h3 className="text-white font-bold text-xl mt-6">Termination by Us</h3>
-               <p>We may suspend or terminate your access if you violate these Terms or create legal risk for us.</p>
-            </div>
-          </>
-        );
-
-      // --- PRIVACY DETAIL PAGES ---
-
-      case 'DATA_TYPES':
-        return (
-           <>
-            <LegalPageHeader title="Data Collection Types" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>We classify collected data into four distinct tiers:</p>
-               <ul className="space-y-4">
-                 <li className="bg-surfaceHighlight/20 p-5 rounded-xl border border-white/5">
-                    <strong className="block text-white text-lg mb-2">Tier 1: Identity</strong>
-                    <span className="text-xs">Email, Name, Phone (Optional), Password Hash. Necessary for account management.</span>
-                 </li>
-                 <li className="bg-surfaceHighlight/20 p-5 rounded-xl border border-white/5">
-                    <strong className="block text-white text-lg mb-2">Tier 2: Operational</strong>
-                    <span className="text-xs">Task prompts, timestamps, completion status. Necessary for service delivery.</span>
-                 </li>
-                 <li className="bg-surfaceHighlight/20 p-5 rounded-xl border border-white/5">
-                    <strong className="block text-white text-lg mb-2">Tier 3: Financial</strong>
-                    <span className="text-xs">Transaction logs, current balance. We do NOT store full credit card numbers (tokenized via Stripe).</span>
-                 </li>
-                 <li className="bg-surfaceHighlight/20 p-5 rounded-xl border border-white/5">
-                    <strong className="block text-white text-lg mb-2">Tier 4: Telemetry</strong>
-                    <span className="text-xs">Device Model, Crash Logs. Used for debugging.</span>
-                 </li>
-               </ul>
-            </div>
-           </>
-        );
-
-      case 'SECURE_ENCLAVE':
-        return (
-          <>
-            <LegalPageHeader title="Secure Enclave" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <div className="flex justify-center my-8">
-                 <ShieldCheck size={100} className="text-primary opacity-80" />
-               </div>
-               <p>The Secure Enclave is a dedicated hardware subsystem in modern devices. It functions as a "Black Box" for cryptographic operations.</p>
-               <h3 className="text-white font-bold text-xl mt-6">Authentication Flow</h3>
-               <ol className="list-decimal pl-5 space-y-4">
-                 <li><strong>Request:</strong> OnePoint requests authentication for a sensitive action.</li>
-                 <li><strong>Local Verify:</strong> Your device verifies your biometrics (Face/Fingerprint).</li>
-                 <li><strong>Sign:</strong> The Enclave signs a cryptographic token if successful.</li>
-                 <li><strong>Result:</strong> OnePoint receives only the confirmation token, never the biometric data.</li>
-               </ol>
-            </div>
-          </>
-        );
-
-      case 'LEGAL_REQUESTS':
-         return (
-           <>
-             <LegalPageHeader title="Law Enforcement" />
-             <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-                <p>We may disclose your information if we believe it is reasonably necessary to:</p>
-                <ul className="list-disc pl-5 space-y-2">
-                   <li>Comply with a valid legal process (warrants, subpoenas).</li>
-                   <li>Protect the safety of any person.</li>
-                   <li>Address fraud or security issues.</li>
-                </ul>
-             </div>
-           </>
-         );
-
-      case 'SECURITY_MEASURES':
-         return (
-           <>
-             <LegalPageHeader title="Security Measures" />
-             <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-                <p>We employ "Defense in Depth":</p>
-                <div className="space-y-4">
-                  <div className="border border-white/10 rounded-xl p-5 bg-white/5">
-                     <div className="flex items-center gap-3 mb-3 text-white font-bold text-lg">
-                        <Lock size={20} className="text-accent" />
-                        <span>Encryption</span>
-                     </div>
-                     <p className="text-sm text-gray-300">Data at rest is encrypted via AES-256. Data in transit uses TLS 1.3.</p>
-                  </div>
-                </div>
-             </div>
-           </>
-         );
-      
-      case 'DATA_USAGE':
-        return (
-          <>
-            <LegalPageHeader title="Data Usage" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>We use your data to:</p>
-               <ul className="list-disc pl-5 space-y-2">
-                 <li>Provide the autonomous service.</li>
-                 <li>Process transactions and prevent fraud.</li>
-                 <li>Improve AI model performance (anonymized only).</li>
-               </ul>
-               <p className="mt-4 text-xs text-gray-400">We do NOT use your private financial details to train general public models.</p>
-            </div>
-          </>
-        );
-
-      case 'PROVIDERS':
-        return (
-          <>
-            <LegalPageHeader title="Service Providers" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-              <p>We utilize the following vetted subprocessors:</p>
-              <ul className="space-y-4">
-                 <li className="bg-white/5 p-5 rounded-2xl">
-                    <strong className="text-white block">Google Cloud</strong>
-                    <span className="text-sm text-gray-400">AI Models & Infrastructure.</span>
-                 </li>
-                 <li className="bg-white/5 p-5 rounded-2xl">
-                    <strong className="text-white block">Supabase</strong>
-                    <span className="text-sm text-gray-400">Encrypted Database.</span>
-                 </li>
-                 <li className="bg-white/5 p-5 rounded-2xl">
-                    <strong className="text-white block">Stripe</strong>
-                    <span className="text-sm text-gray-400">Payment Processing.</span>
-                 </li>
-              </ul>
-            </div>
-          </>
-        );
-
-      case 'RETENTION':
-        return (
-          <>
-            <LegalPageHeader title="Data Retention" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>We keep data only as long as required.</p>
-               <ul className="list-disc pl-5 space-y-3">
-                 <li><strong>Active Accounts:</strong> Retained for the life of the account.</li>
-                 <li><strong>Deleted Accounts:</strong> Wiped from active DB within 30 days.</li>
-                 <li><strong>Financial Records:</strong> Retained for 7 years (legal requirement).</li>
-               </ul>
-            </div>
-          </>
-        );
-
-      case 'INTERNATIONAL':
-        return (
-          <>
-            <LegalPageHeader title="International Transfers" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>OnePoint is headquartered in the United States. Data is processed in the US. We utilize Standard Contractual Clauses (SCCs) for EEA data transfers.</p>
-            </div>
-          </>
-        );
-
-      case 'COOKIES':
-        return (
-          <>
-            <LegalPageHeader title="Cookie Policy" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>We are a tracker-free platform. We use Local Storage strictly for essential functionality (Login session, Preferences).</p>
-            </div>
-          </>
-        );
-
-      case 'RIGHTS':
-        return (
-          <>
-            <LegalPageHeader title="Your Privacy Rights" />
-            <div className="px-6 pb-24 space-y-6 text-gray-300 text-sm leading-relaxed">
-               <p>You have the right to Access, Correct, and Delete your data. You can export your data anytime from the Settings menu.</p>
-            </div>
-          </>
-        );
-
-      default:
-        return <div className="p-10 text-center text-textMuted">Content not found.</div>;
     }
   };
 
@@ -838,13 +550,10 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
 
       {/* 
          FULL SCREEN LEGAL NAVIGATION OVERLAY 
-         If the stack has items, we render the overlay on top of the auth form.
       */}
       {legalStack.length > 0 && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col animate-in slide-in-from-right duration-300">
-           {/* Legal Content Scroll Area */}
            <div className="flex-1 overflow-y-auto no-scrollbar">
-              {/* Back Button Moved inside scroll area */}
               <div className="pt-12 px-6 pb-2">
                   <BackButton onClick={popLegal} />
               </div>
@@ -853,171 +562,188 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
         </div>
       )}
 
-      {/* MAIN AUTH SCREEN CONTENT */}
-      <div className="flex-1 flex flex-col pt-32 pb-10 overflow-y-auto no-scrollbar animate-slide-up">
-        
-        {/* Header */}
-        <div className="mb-6 px-1">
-           <h1 className="text-3xl font-bold mb-2 tracking-tight">{isRegister ? "Create Account" : "Welcome Back"}</h1>
-           <p className="text-textMuted text-lg font-medium">
-             {isRegister ? "Start your autonomous journey." : "Your personal autonomy engine awaits."}
-           </p>
-        </div>
-
-        <div className="space-y-4 mb-2">
-          {isRegister && (
-             <Input 
-              placeholder="Full Name" 
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              leftIcon={<UserIcon size={20} />}
-             />
-          )}
-          <Input 
-            placeholder="Email Address" 
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            leftIcon={<Mail size={20} />}
-            onKeyDown={handleKeyDown}
-          />
-          <Input 
-            placeholder="Password" 
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            leftIcon={<Lock size={20} />}
-            rightIcon={showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            onRightIconClick={() => setShowPassword(!showPassword)}
-            onKeyDown={handleKeyDown}
-          />
-          {isRegister && (
-            <>
-             <Input 
-              placeholder="Confirm Password" 
-              type={showConfirmPassword ? "text" : "password"}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              leftIcon={<Lock size={20} />}
-              rightIcon={showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              onRightIconClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              onKeyDown={handleKeyDown}
-             />
-             
-             {/* LEGAL CONSENT CHECKBOX */}
-             <div className="flex items-start gap-3 px-2 py-3 group">
-                <div 
-                  className={`mt-0.5 transition-colors cursor-pointer ${agreedToTerms ? 'text-primary' : 'text-textMuted group-hover:text-white'}`}
-                  onClick={() => setAgreedToTerms(!agreedToTerms)}
-                >
-                  {agreedToTerms ? <CheckSquare size={20} /> : <Square size={20} />}
-                </div>
-                
-                <p className="text-[14px] text-textMuted leading-relaxed select-none font-sans font-medium">
-                  I agree to the 
-                  <span 
-                    onClick={() => pushLegal('TOS')}
-                    className="text-white hover:text-accent cursor-pointer mx-1 transition-colors underline decoration-white/30"
-                  >
-                    Terms of Service
-                  </span> 
-                  and 
-                  <span 
-                    onClick={() => pushLegal('PRIVACY')}
-                    className="text-white hover:text-accent cursor-pointer mx-1 transition-colors underline decoration-white/30"
-                  >
-                    Privacy Policy
-                  </span>. 
-                  I confirm I am at least 16 years old.
-                </p>
-             </div>
-            </>
-          )}
-
-          {!isRegister && (
-             <div className="flex justify-end px-1">
-               <button 
-                 onClick={handleForgotPassword}
-                 className="text-sm font-bold text-white hover:text-gray-200 transition-colors tracking-wide underline decoration-white/30 underline-offset-2"
-               >
-                 Forgot Password?
-               </button>
-             </div>
-          )}
-        </div>
-
-        {/* Notifications Area */}
-        <div className="min-h-[20px] mb-2 flex flex-col justify-end">
-          {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-200 text-sm animate-in fade-in slide-in-from-top-2">
-              <AlertCircle size={18} className="text-red-400 mt-0.5 shrink-0" />
-              <span className="font-medium">{error}</span>
+      {/* 
+        EMAIL VERIFICATION OVERLAY 
+      */}
+      {awaitingVerification ? (
+         <div className="flex-1 flex flex-col items-center justify-center pt-20 px-6 animate-in fade-in slide-in-from-bottom-8">
+            <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
+               <Mail size={40} className="text-blue-400" />
             </div>
-          )}
+            <h1 className="text-3xl font-bold mb-3 text-center">Check your Inbox</h1>
+            <p className="text-textMuted text-center text-lg leading-relaxed mb-8">
+               We sent a verification link to <span className="text-white font-bold">{email}</span>.
+               <br/><br/>
+               Please confirm your email to activate your account and start using OnePoint.
+            </p>
+            <Button onClick={() => setAwaitingVerification(false)} fullWidth variant="secondary">
+               I Verified My Email
+            </Button>
+            <button onClick={() => setAwaitingVerification(false)} className="mt-6 text-sm text-textMuted hover:text-white transition-colors">
+               Back to Login
+            </button>
+         </div>
+      ) : (
+        /* MAIN AUTH FORM */
+        <div className="flex-1 flex flex-col pt-32 pb-10 overflow-y-auto no-scrollbar animate-slide-up">
           
-          {notification && (
-            <div className="p-4 bg-accent/10 border border-accent/20 rounded-2xl flex items-start gap-3 text-blue-100 text-sm animate-in fade-in slide-in-from-top-2">
-              <Info size={18} className="text-accent mt-0.5 shrink-0" />
-              <span className="font-medium">{notification}</span>
-            </div>
-          )}
-        </div>
+          <div className="mb-6 px-1">
+             <h1 className="text-3xl font-bold mb-2 tracking-tight">{isRegister ? "Create Account" : "Welcome Back"}</h1>
+             <p className="text-textMuted text-lg font-medium">
+               {isRegister ? "Start your autonomous journey." : "Your personal autonomy engine awaits."}
+             </p>
+          </div>
 
-        <div className="flex flex-col gap-4">
-          <Button 
-            onClick={handleAuth} 
-            fullWidth 
-            variant="primary" 
-            disabled={isLoading}
-          >
-            {isLoading ? (
-               <Loader2 className="animate-spin" /> 
-            ) : (
-               <div className="flex items-center gap-2">
-                  <span>{isRegister ? "Create Account" : "Log In"}</span>
-                  <ArrowRight size={20} />
+          <div className="space-y-4 mb-2">
+            {isRegister && (
+               <Input 
+                placeholder="Full Name" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                leftIcon={<UserIcon size={20} />}
+               />
+            )}
+            <Input 
+              placeholder="Email Address" 
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              leftIcon={<Mail size={20} />}
+              onKeyDown={handleKeyDown}
+            />
+            <Input 
+              placeholder="Password" 
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              leftIcon={<Lock size={20} />}
+              rightIcon={showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              onRightIconClick={() => setShowPassword(!showPassword)}
+              onKeyDown={handleKeyDown}
+            />
+            {isRegister && (
+              <>
+               <Input 
+                placeholder="Confirm Password" 
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                leftIcon={<Lock size={20} />}
+                rightIcon={showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                onRightIconClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                onKeyDown={handleKeyDown}
+               />
+               
+               <div className="flex items-start gap-3 px-2 py-3 group">
+                  <div 
+                    className={`mt-0.5 transition-colors cursor-pointer ${agreedToTerms ? 'text-primary' : 'text-textMuted group-hover:text-white'}`}
+                    onClick={() => setAgreedToTerms(!agreedToTerms)}
+                  >
+                    {agreedToTerms ? <CheckSquare size={20} /> : <Square size={20} />}
+                  </div>
+                  
+                  <p className="text-[14px] text-textMuted leading-relaxed select-none font-sans font-medium">
+                    I agree to the 
+                    <span 
+                      onClick={(e) => { e.stopPropagation(); pushLegal('TOS'); }}
+                      className="text-white hover:text-accent cursor-pointer mx-1 transition-colors underline decoration-white/30"
+                    >
+                      Terms of Service
+                    </span> 
+                    and 
+                    <span 
+                      onClick={(e) => { e.stopPropagation(); pushLegal('PRIVACY'); }}
+                      className="text-white hover:text-accent cursor-pointer mx-1 transition-colors underline decoration-white/30"
+                    >
+                      Privacy Policy
+                    </span>. 
+                    I confirm I am at least 16 years old.
+                  </p>
+               </div>
+              </>
+            )}
+
+            {!isRegister && (
+               <div className="flex justify-end px-1">
+                 <button 
+                   onClick={handleForgotPassword}
+                   className="text-sm font-bold text-white hover:text-gray-200 transition-colors tracking-wide underline decoration-white/30 underline-offset-2"
+                 >
+                   Forgot Password?
+                 </button>
                </div>
             )}
-          </Button>
-          
-          {/* Biometric Button */}
-          <button 
-            onClick={handleBiometric} 
-            disabled={isScanning || isLoading}
-            className={`
-               w-full h-[56px] rounded-full font-bold text-[16px] flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50
-               bg-[#0A0A0A] border border-white text-white hover:bg-[#1a1a1a] shadow-lg
-               ${isScanning ? 'bg-white/10' : ''}
-            `}
-          >
-            {isScanning ? (
-              <span className="flex items-center gap-3 animate-pulse font-medium">
-                 <Loader2 size={20} className="animate-spin" /> 
-                 Authenticating...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2 font-medium">
-                <ScanFace size={20} className={isRegister ? "text-white" : "text-white"} /> 
-                {isRegister ? "Enable Face ID" : "Log in with Face ID"}
-              </span>
-            )}
-          </button>
-        </div>
-        
-        {/* Footer */}
-        {!isRegister && (
-          <div className="mt-8 text-center pb-8 flex justify-center items-center gap-1.5">
-             <span className="text-sm text-white/60 font-medium">Don't have an account?</span>
-             <button 
-                onClick={toggleMode}
-                className="text-sm text-white font-bold hover:text-white/80 transition-colors underline decoration-white/30 underline-offset-2"
-             >
-                Register
-             </button>
           </div>
-        )}
 
-      </div>
+          <div className="min-h-[20px] mb-2 flex flex-col justify-end">
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-200 text-sm animate-in fade-in slide-in-from-top-2">
+                <AlertCircle size={18} className="text-red-400 mt-0.5 shrink-0" />
+                <span className="font-medium">{error}</span>
+              </div>
+            )}
+            
+            {notification && (
+              <div className="p-4 bg-accent/10 border border-accent/20 rounded-2xl flex items-start gap-3 text-blue-100 text-sm animate-in fade-in slide-in-from-top-2">
+                <Info size={18} className="text-accent mt-0.5 shrink-0" />
+                <span className="font-medium">{notification}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <Button 
+              onClick={handleAuth} 
+              fullWidth 
+              variant="primary" 
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                 <Loader2 className="animate-spin" /> 
+              ) : (
+                 <div className="flex items-center gap-2">
+                    <span>{isRegister ? "Create Account" : "Log In"}</span>
+                    <ArrowRight size={20} />
+                 </div>
+              )}
+            </Button>
+            
+            <button 
+              onClick={handleBiometric} 
+              disabled={isScanning || isLoading}
+              className={`
+                 w-full h-[56px] rounded-full font-bold text-[16px] flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50
+                 bg-[#0A0A0A] border border-white text-white hover:bg-[#1a1a1a] shadow-lg
+                 ${isScanning ? 'bg-white/10' : ''}
+              `}
+            >
+              {isScanning ? (
+                <span className="flex items-center gap-3 animate-pulse font-medium">
+                   <Loader2 size={20} className="animate-spin" /> 
+                   Authenticating...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 font-medium">
+                  <ScanFace size={20} className={isRegister ? "text-white" : "text-white"} /> 
+                  {isRegister ? "Enable Face ID" : "Log in with Face ID"}
+                </span>
+              )}
+            </button>
+          </div>
+          
+          {!isRegister && (
+            <div className="mt-8 text-center pb-8 flex justify-center items-center gap-1.5">
+               <span className="text-sm text-white/60 font-medium">Don't have an account?</span>
+               <button 
+                  onClick={toggleMode}
+                  className="text-sm text-white font-bold hover:text-white/80 transition-colors underline decoration-white/30 underline-offset-2"
+               >
+                  Register
+               </button>
+            </div>
+          )}
+        </div>
+      )}
     </Screen>
   );
 };
