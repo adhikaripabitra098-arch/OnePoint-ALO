@@ -164,7 +164,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                   <span className="text-sm text-white/60 font-medium">Already have an account?</span>
                   <button 
                     onClick={() => finishSetup('LOGIN')}
-                    className="text-sm font-bold text-white hover:text-white/80 transition-colors cursor-pointer"
+                    className="text-sm font-bold text-white hover:text-white/80 transition-colors cursor-pointer underline decoration-white/30 underline-offset-2"
                   >
                     Log In
                   </button>
@@ -335,14 +335,38 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               <div className="space-y-4">
                 {/* Permissions Cards */}
                 {[
-                  { id: 'notifications', icon: Bell, label: 'Notifications', desc: 'Critical alerts & approvals', active: permissions.notifications },
-                  { id: 'location', icon: MapPin, label: 'Location', desc: 'Automated pickups & services', active: permissions.location },
-                  { id: 'camera', icon: Camera, label: 'Camera', desc: 'Receipt scanning & vision', active: permissions.camera }
+                  { 
+                    id: 'notifications', 
+                    icon: Bell, 
+                    label: 'Notifications', 
+                    desc: 'Critical alerts & approvals', 
+                    active: permissions.notifications,
+                    color: 'text-blue-400',
+                    bg: 'bg-blue-500/20'
+                  },
+                  { 
+                    id: 'location', 
+                    icon: MapPin, 
+                    label: 'Location', 
+                    desc: 'Automated pickups & services', 
+                    active: permissions.location,
+                    color: 'text-purple-400',
+                    bg: 'bg-purple-500/20'
+                  },
+                  { 
+                    id: 'camera', 
+                    icon: Camera, 
+                    label: 'Camera', 
+                    desc: 'Receipt scanning & vision', 
+                    active: permissions.camera,
+                    color: 'text-orange-400',
+                    bg: 'bg-orange-500/20'
+                  }
                 ].map((item: any) => (
                   <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/20 flex items-center justify-between shadow-lg">
                       <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
-                              <item.icon size={22} className={item.active ? "text-green-400" : "text-white"} />
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.bg}`}>
+                              <item.icon size={22} className={item.color} />
                           </div>
                           <div>
                               <h3 className="text-xl font-semibold text-white mb-0.5">{item.label}</h3>

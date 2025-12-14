@@ -45,7 +45,7 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
     let initialStatus = TaskStatus.CREATED;
     let requiresAuth = false;
 
-    // --- SPENDING LIMIT LOGIC ---
+    // --- SPENDING LIMIT LOGIC (Enforcing TOS Financial Terms) ---
     // Rule 1: High Value -> Requires Biometric Auth NOW
     if (analysis.cost > hardLimit) {
       requiresAuth = true;
