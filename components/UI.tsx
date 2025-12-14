@@ -71,37 +71,38 @@ export const BackButton: React.FC<{ onClick: () => void; className?: string }> =
   </button>
 );
 
-// --- Input ---
+// --- Input (Reverted to original visual style) ---
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   onRightIconClick?: () => void;
 }
 
-export const Input: React.FC<InputProps> = ({ label, leftIcon, rightIcon, onRightIconClick, className = '', ...props }) => {
+export const Input: React.FC<InputProps> = ({ leftIcon, rightIcon, onRightIconClick, className = '', ...props }) => {
   return (
-    <div className="w-full group">
-      {label && <label className="block text-xs font-semibold text-textMuted mb-2 ml-4 uppercase tracking-wider">{label}</label>}
-      <div className="relative">
-        {leftIcon && (
-          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-textMuted group-focus-within:text-white transition-colors">
-            {leftIcon}
-          </div>
-        )}
-        <input 
-          className={`w-full bg-white/[0.03] border border-white/10 text-white rounded-[24px] h-[64px] px-6 text-lg placeholder:text-textMuted/50 outline-none focus:bg-white/[0.08] focus:border-white/20 transition-all duration-300 ${leftIcon ? 'pl-14' : ''} ${rightIcon ? 'pr-14' : ''} ${className}`}
-          {...props}
-        />
-        {rightIcon && (
-          <div 
-            onClick={onRightIconClick}
-            className={`absolute right-5 top-1/2 -translate-y-1/2 text-textMuted hover:text-white transition-colors ${onRightIconClick ? 'cursor-pointer' : ''}`}
-          >
-            {rightIcon}
-          </div>
-        )}
-      </div>
+    <div className="w-full relative group">
+      {leftIcon && (
+        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-textMuted group-focus-within:text-white transition-colors">
+          {leftIcon}
+        </div>
+      )}
+      <input 
+        className={`
+          w-full bg-white/[0.03] border border-white/10 rounded-[24px] h-[64px] px-6 text-lg placeholder:text-textMuted/50 outline-none text-white focus:bg-white/[0.08] focus:border-white/20 transition-all duration-300
+          ${leftIcon ? 'pl-14' : ''} 
+          ${rightIcon ? 'pr-14' : ''} 
+          ${className}
+        `}
+        {...props}
+      />
+      {rightIcon && (
+        <div 
+          onClick={onRightIconClick}
+          className={`absolute right-5 top-1/2 -translate-y-1/2 text-textMuted hover:text-white transition-colors ${onRightIconClick ? 'cursor-pointer' : ''}`}
+        >
+          {rightIcon}
+        </div>
+      )}
     </div>
   );
 };

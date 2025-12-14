@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Screen, Button, BackButton } from '../components/UI';
 import { ArrowRight, Check, Shield, Zap, Lock, Smartphone, Camera, MapPin, Bell } from 'lucide-react';
 import { NegotiationStyle, UserPreferences } from '../types';
+import { registerPushNotifications } from '../services/notificationService';
 
 interface OnboardingProps {
   onComplete: (prefs: UserPreferences, mode: 'LOGIN' | 'REGISTER') => void;
@@ -22,9 +23,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     location: false,
     camera: false
   });
-
-  // NOTE: Initial permission check removed per user request. 
-  // User must explicitly tap "Allow" to trigger checks/requests.
 
   // Local state strings to manage input without leading zero issues
   const [limitInput, setLimitInput] = useState('100');
@@ -84,6 +82,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           const notifResult = await Notification.requestPermission();
           if (notifResult === 'granted') {
              setPermissions(p => ({...p, notifications: true}));
+             // This service automatically checks if VAPID keys exist.
+             // If yes -> Real subscription. If no -> Just records local permission granted.
+             await registerPushNotifications();
           } else {
              alert('Notifications blocked. Please enable them in system settings.');
           }
@@ -94,7 +95,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
              alert("Geolocation is not supported.");
              return;
           }
-          // Increased timeout to 60s to fix "works for 10 sec" timeout issue
+          // This uses standard W3C Geolocation API.
+          // It works automatically on any device with GPS/WiFi if the site is HTTPS.
           navigator.geolocation.getCurrentPosition(
             () => setPermissions(p => ({...p, location: true})),
             (err) => {
@@ -107,9 +109,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           break;
           
         case 'camera':
-           // Check if API exists
+           // This uses standard W3C MediaDevices API.
+           // It strictly requires HTTPS (Secure Context) to work on real devices.
            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-              alert("Camera API not supported or context is not secure (HTTPS required).");
+              alert("Camera access requires a secure connection (HTTPS). If you are testing locally, use localhost.");
               return;
            }
            try {
@@ -125,7 +128,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                alert('Camera access denied. Please allow camera access in your browser settings.');
              } else {
                console.error("Camera error:", err);
-               alert('Could not access camera. Please try again.');
+               alert('Could not access camera. Ensure you are on HTTPS.');
              }
            }
            break;

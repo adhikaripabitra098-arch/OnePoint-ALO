@@ -3,6 +3,7 @@ import { Screen, Button, Input, BackButton } from '../components/UI';
 import { User } from '../types';
 import { Mail, User as UserIcon, Lock, ArrowRight, AlertCircle, ScanFace, Info, Loader2, Eye, EyeOff, CheckSquare, Square, ShieldCheck, ChevronLeft, Scale, Globe, LockKeyhole, Server, CreditCard, Cookie, Gavel, AlertTriangle, FileText, Users, FileWarning, Fingerprint, Database, Landmark, Siren, ShieldAlert, BadgeDollarSign, Copyright, PowerOff, Activity, MessageSquare } from 'lucide-react';
 import { authenticateBiometrics } from '../services/biometricService';
+import { authService } from '../services/authService';
 
 interface AuthProps {
   initialMode?: 'LOGIN' | 'REGISTER';
@@ -17,6 +18,8 @@ const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-
 
 export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onComplete, onRegister, onLogin, onBack }) => {
   const [isRegister, setIsRegister] = useState(initialMode === 'REGISTER');
+  
+  // Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,41 +50,67 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   };
 
   const handleAuth = async () => {
+    // Reset States
     setError(null);
     setNotification(null);
+    
+    // Validation Logic
+    const cleanEmail = email.trim();
+    const cleanName = name.trim();
+
+    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+        setError("Please enter a valid email address.");
+        if (navigator.vibrate) navigator.vibrate(50);
+        return;
+    }
+    if (!password) {
+        setError("Please enter your password.");
+        if (navigator.vibrate) navigator.vibrate(50);
+        return;
+    }
+    if (isRegister) {
+        if (!cleanName) {
+            setError("Please enter your name.");
+            if (navigator.vibrate) navigator.vibrate(50);
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError("Passwords do not match");
+            if (navigator.vibrate) navigator.vibrate(50);
+            return;
+        }
+        if (password.length < 6) {
+            setError("Password must be at least 6 characters");
+            if (navigator.vibrate) navigator.vibrate(50);
+            return;
+        }
+        if (!agreedToTerms) {
+            setError("You must agree to the Terms of Service");
+            if (navigator.vibrate) navigator.vibrate(50);
+            return;
+        }
+    }
+
     setIsLoading(true);
 
     try {
-      if (!email || !password) {
-        throw new Error("Please fill in all fields.");
+      // Simulate network delay for realism if on local mode
+      // If Supabase is active, this delay is negligible compared to network
+      if (!process.env.SUPABASE_URL) {
+         await new Promise(r => setTimeout(r, 600));
       }
-      
-      const cleanEmail = email.trim();
-      const cleanName = name.trim();
-
-      // Email Validation
-      if (!EMAIL_REGEX.test(cleanEmail)) {
-        throw new Error("Please enter a valid email address.");
-      }
-
-      // Simulate network delay
-      await new Promise(r => setTimeout(r, 600));
 
       if (isRegister) {
-        if (!cleanName) throw new Error("Please enter your name.");
-        if (password !== confirmPassword) throw new Error("Passwords do not match.");
-        if (password.length < 6) throw new Error("Password must be at least 6 characters.");
-        
-        // LEGAL: Mandatory check
-        if (!agreedToTerms) throw new Error("You must agree to the Terms of Service to continue.");
-
         const success = await onRegister(cleanEmail, password, cleanName);
         if (success) {
-           onComplete({ name: cleanName, email: cleanEmail });
+           onComplete({ 
+             name: cleanName, 
+             email: cleanEmail,
+             id: `local_${cleanEmail}` // Assuming local for generic register success in this flow, or authService handles ID generation
+           });
         } else {
            throw new Error("User already exists with this email.");
         }
-
       } else {
         const user = await onLogin(cleanEmail, password);
         if (user) {
@@ -95,6 +124,12 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
       setError(err.message || "Authentication failed");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+        handleAuth();
     }
   };
 
@@ -114,7 +149,12 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
 
     if (result.success) {
        const user = email ? await onLogin(email, 'mock_pass_bypass') : null;
-       onComplete(user || { name: 'User', email: email || 'user@onepoint.ai' });
+       // Fallback mock user if login via bio with unknown email (demo purpose)
+       onComplete(user || { 
+         name: 'User', 
+         email: email || 'user@onepoint.ai',
+         id: email ? `local_${email}` : 'local_biometric_user'
+       });
     } else {
       if (navigator.vibrate) navigator.vibrate(50);
       if (result.error === 'not_setup') {
@@ -127,7 +167,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
     }
   };
 
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     setError(null);
     setNotification(null);
 
@@ -140,7 +180,15 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
       setError("Please enter a valid email address.");
       return;
     }
-    setNotification(`We have sent a password reset link to ${email}. Please check your Gmail.`);
+
+    try {
+      // Use the Unified Auth Service
+      // If Supabase is connected, this sends a real email via Supabase's built-in mailer (Resend/SendGrid)
+      await authService.resetPassword(email);
+      setNotification(`We have sent a password reset link to ${email}. Please check your Gmail.`);
+    } catch (err: any) {
+      setError("Failed to send reset email. " + err.message);
+    }
   };
 
   const toggleMode = () => {
@@ -177,7 +225,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   );
 
   const LegalPageHeader = ({ title, date }: { title: string, date?: string }) => (
-    <div className="mb-10 mt-32 px-6">
+    <div className="mb-10 mt-6 px-6">
       <h1 className="text-4xl font-extrabold tracking-tight mb-3 text-white">{title}</h1>
       {date && <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -794,13 +842,12 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
       */}
       {legalStack.length > 0 && (
         <div className="fixed inset-0 z-[100] bg-background flex flex-col animate-in slide-in-from-right duration-300">
-           {/* Back Button fixed OUTSIDE the scroll area */}
-           <div className="absolute top-12 left-6 z-50">
-               <BackButton onClick={popLegal} />
-           </div>
-
            {/* Legal Content Scroll Area */}
            <div className="flex-1 overflow-y-auto no-scrollbar">
+              {/* Back Button Moved inside scroll area */}
+              <div className="pt-12 px-6 pb-2">
+                  <BackButton onClick={popLegal} />
+              </div>
               {renderLegalContent(legalStack[legalStack.length - 1])}
            </div>
         </div>
@@ -832,6 +879,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             leftIcon={<Mail size={20} />}
+            onKeyDown={handleKeyDown}
           />
           <Input 
             placeholder="Password" 
@@ -841,6 +889,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
             leftIcon={<Lock size={20} />}
             rightIcon={showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             onRightIconClick={() => setShowPassword(!showPassword)}
+            onKeyDown={handleKeyDown}
           />
           {isRegister && (
             <>
@@ -852,6 +901,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
               leftIcon={<Lock size={20} />}
               rightIcon={showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               onRightIconClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              onKeyDown={handleKeyDown}
              />
              
              {/* LEGAL CONSENT CHECKBOX */}

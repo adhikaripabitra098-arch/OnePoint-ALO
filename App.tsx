@@ -9,6 +9,8 @@ import { TaskCreate } from './screens/TaskCreate';
 import { BottomNavigation } from './components/Navigation';
 import { Task, UserPreferences, WalletTransaction, User } from './types';
 import { storageService } from './services/storageService';
+import { authService } from './services/authService';
+import { supabase } from './services/supabaseClient';
 
 export default function App() {
   const [appState, setAppState] = useState<'ONBOARDING' | 'AUTH' | 'MAIN'>('ONBOARDING');
@@ -26,15 +28,38 @@ export default function App() {
   // Temporary holder for preferences chosen during Onboarding
   const [tempOnboardingPrefs, setTempOnboardingPrefs] = useState<UserPreferences | null>(null);
 
-  // 1. Check for existing session on mount
+  // 1. Check for existing session on mount (Supports both Local and Supabase)
   useEffect(() => {
     const initSession = async () => {
-      const session = await storageService.getSession();
-      if (session) {
-        // Restore user state
-        setUser({ name: session.name, email: session.email });
-        await loadUserData(session.email);
+      const sessionUser = await authService.getSession();
+      
+      if (sessionUser) {
+        // User is logged in (either locally or via Supabase)
+        setUser(sessionUser);
+        await loadUserData(sessionUser.email);
         setAppState('MAIN');
+      }
+
+      // If Supabase is active, listen for auth changes in real-time
+      if (supabase) {
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_IN' && session?.user) {
+            const newUser = {
+              email: session.user.email!,
+              name: session.user.user_metadata.full_name || 'User',
+              id: session.user.id
+            };
+            setUser(newUser);
+            await loadUserData(newUser.email);
+            setAppState('MAIN');
+          } else if (event === 'SIGNED_OUT') {
+            handleLogout();
+          }
+        });
+        
+        return () => {
+          authListener.subscription.unsubscribe();
+        };
       }
     };
     initSession();
@@ -42,6 +67,9 @@ export default function App() {
 
   // Helper to load full data for a logged-in user
   const loadUserData = async (email: string) => {
+    // NOTE: For 100% production readiness, this function should also check 
+    // if we are online and fetch data from Supabase DB ('tasks' table) instead of storageService.
+    // Currently, it uses the local encrypted storage for data privacy.
     const data = await storageService.getUserData(email);
     setTasks(data.tasks);
     setPreferences(data.preferences);
@@ -62,24 +90,25 @@ export default function App() {
   };
 
   const handleRegister = async (email: string, pass: string, name: string): Promise<boolean> => {
-    const success = await storageService.registerUser(email, pass, name);
+    // Uses authService which auto-switches to Supabase if keys exist
+    const success = await authService.register(email, pass, name);
+    
     if (success && tempOnboardingPrefs) {
-      // If registration successful, immediately save the onboarding preferences to this new account
+      // If registration successful, save the onboarding preferences
+      // Note: In a full Supabase implementation, we would insert these into a 'profiles' table here.
       const freshData = await storageService.getUserData(email);
       freshData.preferences = tempOnboardingPrefs;
       await storageService.saveUserData(email, freshData);
-      // Update local state immediately
+      
+      // Update local state
       setPreferences(tempOnboardingPrefs);
     }
     return success;
   };
 
   const handleLogin = async (email: string, pass: string): Promise<User | null> => {
-    const user = await storageService.loginUser(email, pass);
-    if (user) {
-      return { name: user.name, email: user.email };
-    }
-    return null;
+    // Uses authService which auto-switches to Supabase if keys exist
+    return await authService.login(email, pass);
   };
 
   const handleAuthComplete = async (userData: User) => {
@@ -94,6 +123,7 @@ export default function App() {
       const currentData = await storageService.getUserData(user.email);
       currentData.preferences = newPrefs;
       await storageService.saveUserData(user.email, currentData);
+      // In Supabase mode, we would also: await supabase.from('profiles').update(...)
     }
   };
 
@@ -111,7 +141,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await storageService.logout();
+    await authService.logout();
     setUser(null);
     setPreferences(null);
     setTasks([]);
@@ -119,10 +149,9 @@ export default function App() {
     setAppState('ONBOARDING');
   };
 
-  // NEW: Handle true deletion of data
   const handleDeleteAccount = async () => {
     if (user) {
-      await storageService.deleteUser(user.email);
+      await authService.deleteAccount(user.id);
       handleLogout();
     }
   };
