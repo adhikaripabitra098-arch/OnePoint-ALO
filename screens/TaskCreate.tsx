@@ -9,13 +9,14 @@ interface TaskCreateProps {
   onClose: () => void;
   onCreate: (task: Task) => void;
   userPreferences: UserPreferences | null;
+  initialMode?: 'DEFAULT' | 'VOICE' | 'REFUND' | 'SCAN';
 }
 
-// Helper to access Web Speech API (Browser native)
-// NOTE: For Production Release (App Store), replace this with a real API like OpenAI Whisper or Google Cloud Speech if you need cross-browser support beyond Chrome/Safari.
+// Browser Speech Compatibility
+// We access the prefixed versions to ensure Safari support
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userPreferences }) => {
+export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userPreferences, initialMode = 'DEFAULT' }) => {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysis, setAnalysis] = useState<{title: string, type: TaskType, summary: string, cost: number} | null>(null);
@@ -31,6 +32,18 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
   // Security Check State
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // --- Initialize based on Mode ---
+  useEffect(() => {
+     if (initialMode === 'REFUND') {
+        setInput("I need a refund for [VENDOR] because...");
+     } else if (initialMode === 'VOICE') {
+        // Auto-start listening after a brief mounting delay
+        setTimeout(() => toggleListening(), 300);
+     } else if (initialMode === 'SCAN') {
+        setTimeout(() => fileInputRef.current?.click(), 300);
+     }
+  }, [initialMode]);
 
   // --- Image Handling ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,31 +70,50 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
     }
 
     if (!SpeechRecognition) {
-      alert("Voice input is not supported in this browser environment. Please type your request.");
+      // Graceful fallback if no speech API
+      console.warn("Speech API unavailable");
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true; // Use interim to show text while talking
+      recognition.lang = 'en-US';
 
-    recognition.onstart = () => setIsListening(true);
-    
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + (prev ? ' ' : '') + transcript);
-    };
+      recognition.onstart = () => setIsListening(true);
+      
+      recognition.onresult = (event: any) => {
+        // Get the latest transcript
+        let interimTranscript = '';
+        let finalTranscript = '';
 
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      setIsListening(false);
-    };
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        // Simple append for now
+        if (finalTranscript) {
+           setInput(prev => prev + (prev ? ' ' : '') + finalTranscript);
+        }
+      };
 
-    recognition.onend = () => setIsListening(false);
+      recognition.onerror = (event: any) => {
+        console.warn("Speech recognition error", event.error);
+        setIsListening(false);
+      };
 
-    recognitionRef.current = recognition;
-    recognition.start();
+      recognition.onend = () => setIsListening(false);
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (e) {
+      console.error("Speech Init Failed", e);
+    }
   };
 
 
@@ -150,7 +182,8 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-sm flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-200">
+    // UPDATED: Solid background color (#050505) instead of transparent blur
+    <div className="fixed inset-0 z-[60] bg-[#050505] flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-200">
       <div className="p-4 flex justify-between items-center border-b border-white/5">
         <div className="w-10"></div>
         <h2 className="font-bold text-lg">New Task</h2>
@@ -166,13 +199,15 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={isListening ? "Listening..." : "e.g., Get a refund from Amazon for order #123..."}
-                className={`w-full h-32 bg-surfaceHighlight/50 border ${isListening ? 'border-red-500/50 animate-pulse' : 'border-white/5'} rounded-2xl p-4 text-lg outline-none resize-none placeholder:text-textMuted font-medium transition-all`}
+                placeholder={isListening ? "Listening..." : "Describe task..."}
+                // REMOVED RED PULSE, KEPT CLEAN
+                className="w-full h-32 bg-surfaceHighlight/50 border border-white/5 rounded-2xl p-4 text-lg outline-none resize-none placeholder:text-textMuted font-medium transition-all"
                 autoFocus
               />
               {isListening && (
-                 <div className="absolute top-4 right-4 text-red-500 animate-pulse">
-                    <Mic size={20} fill="currentColor" />
+                 <div className="absolute top-4 right-4 text-white animate-pulse">
+                    {/* Updated to match Voice Icon from Quick Actions */}
+                    <Mic size={20} />
                  </div>
               )}
             </div>
@@ -227,10 +262,11 @@ export const TaskCreate: React.FC<TaskCreateProps> = ({ onClose, onCreate, userP
                </div>
             </div>
 
-            <div className="mt-6 p-4 bg-[#00D6C3]/10 border border-[#00D6C3]/20 rounded-2xl flex gap-3">
+            {/* INFO CARD - UPDATED COLOR AND REMOVED (Gemini) */}
+            <div className="mt-6 p-4 bg-[#0A0A0A] border border-white/20 rounded-2xl flex gap-3 shadow-lg">
                <Sparkles className="text-primary flex-shrink-0 mt-0.5" size={20} />
                <p className="text-sm text-primary/90 leading-relaxed font-medium">
-                 OnePoint AI (Gemini) will analyze your request and apply your {userPreferences?.negotiationStyle || 'NEUTRAL'} negotiation style.
+                 OnePoint will analyze your request and apply your {userPreferences?.negotiationStyle || 'NEUTRAL'} negotiation style.
                </p>
             </div>
           </>

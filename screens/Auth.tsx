@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Screen, Button, Input, BackButton } from '../components/UI';
 import { User } from '../types';
 import { Mail, User as UserIcon, Lock, ArrowRight, AlertCircle, ScanFace, Info, Loader2, Eye, EyeOff, CheckSquare, Square, ShieldCheck, ChevronLeft, Scale, Globe, LockKeyhole, Server, CreditCard, Cookie, Gavel, AlertTriangle, FileText, Users, FileWarning, Fingerprint, Database, Landmark, Siren, ShieldAlert, BadgeDollarSign, Copyright, PowerOff, Activity, Clock } from 'lucide-react';
@@ -33,6 +33,9 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   
   // FULL SCREEN LEGAL NAVIGATION STACK
   const [legalStack, setLegalStack] = useState<string[]>([]);
+  
+  // REF for Auto-Scrolling
+  const legalScrollRef = useRef<HTMLDivElement>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
@@ -42,6 +45,14 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   // Password Visibility State
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // --- SCROLL TO TOP EFFECT ---
+  // Whenever the legal stack changes (user taps a blue link), scroll the container to top
+  useEffect(() => {
+    if (legalScrollRef.current) {
+        legalScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [legalStack]);
 
   // --- LEGAL NAVIGATION HELPERS ---
   const pushLegal = (pageId: string) => {
@@ -563,10 +574,14 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
 
       {/* 
          FULL SCREEN LEGAL NAVIGATION OVERLAY 
+         UPDATED: Added Revolut-like gradient background + useRef for scrolling
       */}
       {legalStack.length > 0 && (
-        <div className="fixed inset-0 z-[100] bg-background flex flex-col animate-in slide-in-from-right duration-300">
-           <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="fixed inset-0 z-[100] bg-[#050505] flex flex-col animate-in slide-in-from-right duration-300">
+           {/* REVOLUT-LIKE SPLASH GRADIENT BLOB */}
+           <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
+           
+           <div className="flex-1 overflow-y-auto no-scrollbar relative z-10" ref={legalScrollRef}>
               <div className="pt-12 px-6 pb-2">
                   <BackButton onClick={popLegal} />
               </div>
