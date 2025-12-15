@@ -76,17 +76,21 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       switch (type) {
         case 'notifications':
           if (!('Notification' in window)) {
+             // Silently fail or simple alert, but don't crash
              alert("Notifications are not supported on this device.");
              return;
           }
-          const notifResult = await Notification.requestPermission();
-          if (notifResult === 'granted') {
-             setPermissions(p => ({...p, notifications: true}));
-             // This service automatically checks if VAPID keys exist.
-             // If yes -> Real subscription. If no -> Just records local permission granted.
-             await registerPushNotifications();
-          } else {
-             alert('Notifications blocked. Please enable them in system settings.');
+          try {
+            const notifResult = await Notification.requestPermission();
+            if (notifResult === 'granted') {
+               setPermissions(p => ({...p, notifications: true}));
+               await registerPushNotifications();
+            } else {
+               // User denied - no operation needed, toggle stays off
+               console.warn("Notifications denied by user.");
+            }
+          } catch (e) {
+            console.warn("Notification request failed", e);
           }
           break;
           
@@ -95,46 +99,33 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
              alert("Geolocation is not supported.");
              return;
           }
-          // This uses standard W3C Geolocation API.
-          // It works automatically on any device with GPS/WiFi if the site is HTTPS.
           navigator.geolocation.getCurrentPosition(
             () => setPermissions(p => ({...p, location: true})),
             (err) => {
-              if (err.code === 1) alert('Location access denied. Please enable in device settings.');
-              else if (err.code === 3) console.warn('Location request timed out.');
-              else console.warn('Location error:', err.message);
+              // Permission denied or timeout - fail gracefully
+              console.warn('Location access denied/failed:', err.message);
             },
             { enableHighAccuracy: true, timeout: 60000, maximumAge: 0 }
           );
           break;
           
         case 'camera':
-           // This uses standard W3C MediaDevices API.
-           // It strictly requires HTTPS (Secure Context) to work on real devices.
            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-              alert("Camera access requires a secure connection (HTTPS). If you are testing locally, use localhost.");
+              alert("Camera access requires a secure connection (HTTPS).");
               return;
            }
            try {
              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-             // Access granted successfully
              setPermissions(p => ({...p, camera: true}));
-             
-             // Important: We stop the stream to release the camera light, 
-             // but we keep the 'camera: true' state in the UI.
+             // Immediately stop the stream (we just wanted permission)
              stream.getTracks().forEach(t => t.stop());
            } catch (err: any) {
-             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-               alert('Camera access denied. Please allow camera access in your browser settings.');
-             } else {
-               console.error("Camera error:", err);
-               alert('Could not access camera. Ensure you are on HTTPS.');
-             }
+             console.warn("Camera access denied or failed:", err);
            }
            break;
       }
     } catch (e: any) {
-       console.error("Permission request failed:", e);
+       console.error("Permission request system error:", e);
     }
   };
 

@@ -61,22 +61,23 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
     const cleanEmail = email.trim();
     const cleanName = name.trim();
 
-    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+    // 1. General Empty Check (Prioritized over specific field errors)
+    // This ensures users see "Please fill in all fields" before "Invalid email"
+    if (!cleanEmail || !password || (isRegister && !cleanName)) {
+        setError("Please fill in all fields.");
+        if (navigator.vibrate) navigator.vibrate(50);
+        return;
+    }
+
+    // 2. Specific Email Format Check
+    if (!EMAIL_REGEX.test(cleanEmail)) {
         setError("Please enter a valid email address.");
         if (navigator.vibrate) navigator.vibrate(50);
         return;
     }
-    if (!password) {
-        setError("Please enter your password.");
-        if (navigator.vibrate) navigator.vibrate(50);
-        return;
-    }
+
+    // 3. Registration Specific Checks
     if (isRegister) {
-        if (!cleanName) {
-            setError("Please enter your name.");
-            if (navigator.vibrate) navigator.vibrate(50);
-            return;
-        }
         if (password !== confirmPassword) {
             setError("Passwords do not match");
             if (navigator.vibrate) navigator.vibrate(50);
@@ -221,12 +222,22 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   };
 
   // --- LEGAL COMPONENTS ---
+  // MODIFIED FOR ACCESSIBILITY (GUIDELINE 2.5)
   const LegalLink = ({ to, children }: { to: string, children?: React.ReactNode }) => (
     <span 
       onClick={(e) => {
         e.stopPropagation();
         pushLegal(to);
-      }} 
+      }}
+      // ARIA roles for accessibility scanners
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            pushLegal(to);
+        }
+      }}
       className="text-accent hover:text-blue-300 cursor-pointer font-bold mx-0.5 underline decoration-accent/30 underline-offset-2 transition-colors"
     >
       {children}
@@ -245,20 +256,20 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
     </section>
   );
 
-  const LegalParagraph = ({children}: {children: React.ReactNode}) => (
+  const LegalParagraph = ({children}: {children?: React.ReactNode}) => (
     <p className="mb-6 text-gray-300 leading-8 text-[15px] font-medium tracking-wide">
       {children}
     </p>
   );
 
-  const LegalHeader = ({children}: {children: React.ReactNode}) => (
+  const LegalHeader = ({children}: {children?: React.ReactNode}) => (
     <h4 className="text-white font-bold text-lg mb-4 mt-10 border-b border-white/10 pb-3 flex items-center gap-2">
       <div className="w-1.5 h-1.5 bg-accent rounded-full" />
       {children}
     </h4>
   );
 
-  const LegalNote = ({children}: {children: React.ReactNode}) => (
+  const LegalNote = ({children}: {children?: React.ReactNode}) => (
     <div className="bg-white/5 border-l-4 border-accent p-6 rounded-r-xl my-8">
       <p className="text-sm text-gray-400 italic font-medium">{children}</p>
     </div>
@@ -283,6 +294,7 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
           <>
             <LegalPageHeader title="Terms of Service" date={new Date().toLocaleDateString()} />
             <div className="px-6 pb-32">
+               {/* TOS SUMMARY CARD - EXPLICITLY INCLUDED */}
                <div className="bg-surfaceHighlight/20 p-8 rounded-3xl mb-12 border border-white/5 backdrop-blur-xl">
                  <p className="text-base font-medium leading-relaxed text-gray-200">
                    This document ("Agreement") is a legally binding contract between you ("User") and OnePoint Inc. ("Service"). 
@@ -346,8 +358,9 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
           <>
             <LegalPageHeader title="Privacy Policy" date={new Date().toLocaleDateString()} />
             <div className="px-6 pb-32">
-               <div className="bg-blue-500/10 p-8 rounded-3xl mb-12 border border-blue-500/20 backdrop-blur-xl">
-                 <p className="text-base font-medium leading-relaxed text-blue-100">
+               {/* Updated to match TOS Style (Black/Gray instead of Blue) */}
+               <div className="bg-surfaceHighlight/20 p-8 rounded-3xl mb-12 border border-white/5 backdrop-blur-xl">
+                 <p className="text-base font-medium leading-relaxed text-gray-200">
                    OnePoint operates on a <LegalLink to="LOCAL_FIRST">Local-First Architecture</LegalLink>. We believe your data belongs on your device, not in the cloud. This policy details how we minimize data exposure.
                  </p>
                </div>
@@ -638,6 +651,15 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                   <div 
                     className={`mt-0.5 transition-colors cursor-pointer ${agreedToTerms ? 'text-primary' : 'text-textMuted group-hover:text-white'}`}
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
+                    role="checkbox"
+                    aria-checked={agreedToTerms}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                       if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setAgreedToTerms(!agreedToTerms);
+                       }
+                    }}
                   >
                     {agreedToTerms ? <CheckSquare size={20} /> : <Square size={20} />}
                   </div>
@@ -647,6 +669,9 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                     <span 
                       onClick={(e) => { e.stopPropagation(); pushLegal('TOS'); }}
                       className="text-white hover:text-accent cursor-pointer mx-1 transition-colors underline decoration-white/30"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pushLegal('TOS'); } }}
                     >
                       Terms of Service
                     </span> 
@@ -654,6 +679,9 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                     <span 
                       onClick={(e) => { e.stopPropagation(); pushLegal('PRIVACY'); }}
                       className="text-white hover:text-accent cursor-pointer mx-1 transition-colors underline decoration-white/30"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pushLegal('PRIVACY'); } }}
                     >
                       Privacy Policy
                     </span>. 
