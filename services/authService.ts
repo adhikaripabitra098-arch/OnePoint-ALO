@@ -110,7 +110,8 @@ export const authService = {
       });
       if (error) throw error;
     } else {
-      await new Promise(r => setTimeout(r, 1000));
+      // SET TO 50ms for ultra-snappy feedback matching Face ID speed
+      await new Promise(r => setTimeout(r, 50));
     }
   },
 

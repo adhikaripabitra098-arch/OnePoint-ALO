@@ -47,7 +47,6 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // --- SCROLL TO TOP EFFECT ---
-  // Using 'instant' to prevent visual jumpiness during the slide animation
   useEffect(() => {
     if (legalScrollRef.current) {
         legalScrollRef.current.scrollTo({ top: 0, behavior: 'instant' });
@@ -299,7 +298,6 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
             <>
               <LegalPageHeader title="Terms of Service" date={new Date().toLocaleDateString()} />
               <div>
-                 {/* Removed backdrop-blur-xl here to prevent scroll lag */}
                  <div className="bg-surfaceHighlight/20 p-8 rounded-3xl mb-12 border border-white/5">
                    <p className="text-base font-medium leading-relaxed text-gray-200">
                      This document ("<LegalLink to="AGREEMENT">Agreement</LegalLink>") constitutes a legally binding <LegalLink to="CONTRACT">contract</LegalLink> between you ("User") and OnePoint Inc. ("<LegalLink to="SERVICE">Service</LegalLink>", "We", "Us"). 
@@ -398,7 +396,6 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
             <>
               <LegalPageHeader title="Privacy Policy" date={new Date().toLocaleDateString()} />
               <div>
-                 {/* Removed backdrop-blur-xl here to prevent scroll lag */}
                  <div className="bg-surfaceHighlight/20 p-8 rounded-3xl mb-12 border border-white/5">
                    <p className="text-base font-medium leading-relaxed text-gray-200">
                      OnePoint operates on a radical <LegalLink to="LOCAL_FIRST">Local-First Architecture</LegalLink>. We believe your data belongs on your device, not in the cloud. 
