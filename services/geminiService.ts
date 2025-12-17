@@ -1,10 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { TaskType, UserPreferences } from "../types";
 
-// MATCHING VITE CONFIG: Ensure we use the exact variable name defined in vite.config.ts
-const apiKey = process.env.GEMINI_API_KEY || '';
-
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const parseTaskInput = async (
   input: string, 
@@ -17,14 +14,14 @@ export const parseTaskInput = async (
   summary: string;
   confidence: number;
 }> => {
-  if (!apiKey) {
-    console.warn("No GEMINI_API_KEY provided. Returning mock data.");
+  if (!process.env.API_KEY) {
+    console.warn("No API_KEY provided. Returning mock data.");
     // Fail-safe mock for review mode if API key is missing
     return {
       title: "Sample Task (No API Key)",
       type: TaskType.GENERAL,
       estimatedCost: 0,
-      summary: "Please configure GEMINI_API_KEY to enable real AI analysis.",
+      summary: "Please configure API_KEY to enable real AI analysis.",
       confidence: 0
     };
   }
