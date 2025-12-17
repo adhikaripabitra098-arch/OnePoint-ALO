@@ -16,11 +16,11 @@ export const IntegrationsScreen: React.FC<IntegrationsProps> = ({ onNavigate }) 
 
   return (
     <Screen>
-      <div className="absolute top-12 left-6 z-50">
+      <div className="absolute top-8 left-6 z-50"> {/* Shifted up to top-8 */}
         <BackButton onClick={() => onNavigate('home')} />
       </div>
 
-      <div className="mt-32 mb-6 animate-slide-up">
+      <div className="mt-24 mb-6 animate-slide-up"> {/* Shifted up to mt-24 */}
         <h1 className="text-2xl font-bold">Integrations</h1>
         <p className="text-textMuted mt-1 font-medium">Connect your digital life to OnePoint.</p>
       </div>

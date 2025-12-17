@@ -76,7 +76,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       switch (type) {
         case 'notifications':
           if (!('Notification' in window)) {
-             // Silently fail or simple alert, but don't crash
              alert("Notifications are not supported on this device.");
              return;
           }
@@ -86,7 +85,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                setPermissions(p => ({...p, notifications: true}));
                await registerPushNotifications();
             } else {
-               // User denied - no operation needed, toggle stays off
                console.warn("Notifications denied by user.");
             }
           } catch (e) {
@@ -102,7 +100,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           navigator.geolocation.getCurrentPosition(
             () => setPermissions(p => ({...p, location: true})),
             (err) => {
-              // Permission denied or timeout - fail gracefully
               console.warn('Location access denied/failed:', err.message);
             },
             { enableHighAccuracy: true, timeout: 60000, maximumAge: 0 }
@@ -117,7 +114,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
            try {
              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
              setPermissions(p => ({...p, camera: true}));
-             // Immediately stop the stream (we just wanted permission)
              stream.getTracks().forEach(t => t.stop());
            } catch (err: any) {
              console.warn("Camera access denied or failed:", err);
@@ -134,9 +130,13 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     switch(step) {
       case 0:
         return (
-          // Splash Container
-          <div className="h-full min-h-screen flex flex-col justify-between relative z-10 pt-16 pb-8">
-            <div className="flex flex-col items-center mt-12 flex-1 justify-center">
+          // Splash Container - FIXED SCROLLING & SMOOTHNESS
+          <div key="splash" className="fixed inset-0 h-full w-full bg-[#050505] flex flex-col justify-between z-50 pt-16 pb-8 overflow-hidden animate-slide-up will-change-[transform,opacity]">
+            
+            {/* RESTORED BACKGROUND BLOB */}
+            <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
+
+            <div className="flex flex-col items-center mt-12 flex-1 justify-center relative z-10">
               <div className="p-4 mb-6">
                 <div className="w-24 h-24 relative flex items-center justify-center animate-float">
                     <div className="absolute inset-0 border-[3px] border-white/20 rounded-full" />
@@ -150,7 +150,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               </h1>
             </div>
 
-            <div className="flex flex-col w-full">
+            <div className="flex flex-col w-full px-5 relative z-10">
               <div className="w-full space-y-4 mb-10">
                 <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Get Started</Button>
                 
@@ -165,7 +165,6 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 </div>
               </div>
 
-              {/* Footer / Trust Signals - Moved here for cleaner UI */}
               <div className="flex justify-center gap-6 pb-2 opacity-40">
                 <div className="flex items-center gap-1.5">
                   <Lock size={10} className="text-white" />
@@ -183,208 +182,212 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
       case 1:
         return (
-          // Inner Pages Container - Back button at top-12 left-6
-          <div className="h-full flex flex-col pt-6">
-            <div className="absolute top-12 left-6 z-50">
-              <BackButton onClick={prevStep} />
-            </div>
+          // Fixed Viewport Layout - Matches Auth Screen
+          // absolute inset-0 ensures full height without nested scrollbars
+          <div key="step1" className="absolute inset-0 z-10">
+            <div className="h-full w-full max-w-md mx-auto flex flex-col">
+              {/* pt-20 px-6 pb-6 matches Auth exactly */}
+              <div className={`flex-1 overflow-y-auto no-scrollbar scroll-smooth pt-20 px-6 pb-6 animate-slide-up will-change-[transform,opacity] ${isTransitioning ? 'pointer-events-none' : ''}`}>
+                
+                <div className="mb-4">
+                   <BackButton onClick={prevStep} />
+                </div>
 
-            {/* Scrollable Content Area */}
-            {/* Pointer events none ensures clicks don't register on inputs during fade */}
-            <div className={`flex-1 overflow-y-auto no-scrollbar pb-32 ${isTransitioning ? 'pointer-events-none' : ''}`}>
-              <div className="mt-32 mb-8">
-                <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
-                <p className="text-white/60 text-lg leading-relaxed font-medium">
-                  Define the autonomy level for your AI agent. You retain full control.
-                </p>
-              </div>
+                <div className="mb-8">
+                  <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
+                  <p className="text-white/60 text-lg leading-relaxed font-medium">
+                    Define the autonomy level for your AI agent. You retain full control.
+                  </p>
+                </div>
 
-              <div className="space-y-6">
-                {/* Card 1: Max Limit */}
-                {/* Fixed border: border-white/20 always visible, no focus change */}
-                <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
-                  <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
-                    <Shield size={60} />
+                <div className="space-y-6">
+                  <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
+                    <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
+                      <Shield size={60} />
+                    </div>
+                    <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
+                    <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
+                    
+                    <div className="relative border-b border-white/20 flex items-center pb-3">
+                      <span className="text-white font-bold text-5xl mr-1">$</span>
+                      <input 
+                        type="tel"
+                        value={limitInput}
+                        onChange={(e) => handleLimitChange(e.target.value)}
+                        placeholder="0"
+                        className="flex-1 bg-transparent text-white text-5xl font-bold outline-none placeholder:text-white/10 min-w-0"
+                        autoComplete="off"
+                        disabled={isTransitioning}
+                      />
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
-                  <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
-                  
-                  {/* Stable underline border */}
-                  <div className="relative border-b border-white/20">
-                    <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
-                    <input 
-                      type="tel"
-                      value={limitInput}
-                      onChange={(e) => handleLimitChange(e.target.value)}
-                      placeholder="0"
-                      className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
-                      autoComplete="off"
-                      disabled={isTransitioning}
-                    />
+
+                  <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
+                    <div className="absolute right-0 top-0 p-4 opacity-10">
+                      <Zap size={60} />
+                    </div>
+                    <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
+                    <p className="text-sm text-white/60 mb-6 font-medium">Transactions up to this amount are handled instantly.</p>
+                    
+                    <div className="relative border-b border-white/20 flex items-center pb-3">
+                      <span className="text-white font-bold text-5xl mr-1">$</span>
+                      <input 
+                        type="tel"
+                        value={approveInput}
+                        onChange={(e) => handleApproveChange(e.target.value)}
+                        placeholder="0"
+                        className="flex-1 bg-transparent text-white text-5xl font-bold outline-none placeholder:text-white/10 min-w-0"
+                        autoComplete="off"
+                        disabled={isTransitioning}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Card 2: Auto Approve */}
-                <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
-                  <div className="absolute right-0 top-0 p-4 opacity-10">
-                    <Zap size={60} />
-                  </div>
-                  <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
-                  <p className="text-sm text-white/60 mb-6 font-medium">Transactions up to this amount are handled instantly.</p>
-                  <div className="relative border-b border-white/20">
-                    <span className="absolute left-0 bottom-3 text-white font-bold text-4xl">$</span>
-                    <input 
-                      type="tel"
-                      value={approveInput}
-                      onChange={(e) => handleApproveChange(e.target.value)}
-                      placeholder="0"
-                      className="w-full bg-transparent text-white text-5xl font-bold pl-10 pb-3 outline-none placeholder:text-white/10"
-                      autoComplete="off"
-                      disabled={isTransitioning}
-                    />
-                  </div>
+                <div className="mt-8">
+                  <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Continue</Button>
                 </div>
               </div>
-            </div>
-
-            <div className="absolute bottom-10 left-6 right-6">
-              <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Continue</Button>
             </div>
           </div>
         );
 
       case 2:
         return (
-          // Agent Persona - Back button at top-12 left-6
-          <div className="h-full flex flex-col pt-6">
-            <div className="absolute top-12 left-6 z-50">
-              <BackButton onClick={prevStep} />
-            </div>
+          // Fixed Viewport Layout - Matches Auth Screen
+          <div key="step2" className="absolute inset-0 z-10">
+            <div className="h-full w-full max-w-md mx-auto flex flex-col">
+              <div className={`flex-1 overflow-y-auto no-scrollbar scroll-smooth pt-20 px-6 pb-6 animate-slide-up will-change-[transform,opacity] ${isTransitioning ? 'pointer-events-none' : ''}`}>
+                 
+                <div className="mb-4">
+                   <BackButton onClick={prevStep} />
+                </div>
 
-            {/* Content ... (Same as before) */}
-            <div className={`flex-1 overflow-y-auto no-scrollbar pb-32 ${isTransitioning ? 'pointer-events-none' : ''}`}>
-              <div className="mt-32 mb-6">
-                <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
-                <p className="text-white/60 text-lg leading-relaxed font-medium">
-                  How should OnePoint communicate with third parties on your behalf?
-                </p>
-              </div>
+                <div className="mb-6">
+                  <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
+                  <p className="text-white/60 text-lg leading-relaxed font-medium">
+                    How should OnePoint communicate with third parties on your behalf?
+                  </p>
+                </div>
 
-              <div className="space-y-4">
-                {Object.values(NegotiationStyle).map((style) => {
-                  const isSelected = prefs.negotiationStyle === style;
-                  return (
-                    <div 
-                      key={style}
-                      onClick={() => {
-                        if (navigator.vibrate) navigator.vibrate(5);
-                        setPrefs({...prefs, negotiationStyle: style});
-                      }}
-                      className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 w-full box-border ${isSelected ? 'bg-white text-black border-2 border-black' : 'bg-[#0A0A0A] border border-white/20 hover:bg-[#1a1a1a] text-white'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-bold capitalize text-xl mb-1">{style.toLowerCase()}</h3>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-gray-600' : 'text-white/60'}`}>
-                            {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
-                            {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
-                            {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
-                            {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
-                          </p>
-                        </div>
-                        {isSelected && (
-                          <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
-                            <Check size={16} className="text-white stroke-[3]" />
+                <div className="space-y-4">
+                  {Object.values(NegotiationStyle).map((style) => {
+                    const isSelected = prefs.negotiationStyle === style;
+                    return (
+                      <div 
+                        key={style}
+                        onClick={() => {
+                          if (navigator.vibrate) navigator.vibrate(5);
+                          setPrefs({...prefs, negotiationStyle: style});
+                        }}
+                        className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 w-full box-border ${isSelected ? 'bg-white text-black border-2 border-black' : 'bg-[#0A0A0A] border border-white/20 hover:bg-[#1a1a1a] text-white'}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <h3 className="font-bold capitalize text-xl mb-1 whitespace-nowrap">{style.toLowerCase()}</h3>
+                            <p className={`text-sm font-medium truncate ${isSelected ? 'text-gray-600' : 'text-white/60'}`}>
+                              {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
+                              {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
+                              {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
+                              {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
+                            </p>
                           </div>
-                        )}
+                          {isSelected && (
+                            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
+                              <Check size={16} className="text-white stroke-[3]" />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                    );
+                  })}
+                </div>
 
-            <div className="absolute bottom-10 left-6 right-6">
-              <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Next</Button>
+                <div className="mt-8">
+                  <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Next</Button>
+                </div>
+              </div>
             </div>
           </div>
         );
 
       case 3:
         return (
-          // System Access - Back button at top-12 left-6
-          <div className="h-full flex flex-col pt-6">
-            <div className="absolute top-12 left-6 z-50">
-              <BackButton onClick={prevStep} />
-            </div>
+          // Fixed Viewport Layout - Matches Auth Screen
+          <div key="step3" className="absolute inset-0 z-10">
+            <div className="h-full w-full max-w-md mx-auto flex flex-col">
+              <div className={`flex-1 overflow-y-auto no-scrollbar scroll-smooth pt-20 px-6 pb-6 animate-slide-up will-change-[transform,opacity] ${isTransitioning ? 'pointer-events-none' : ''}`}>
+                
+                <div className="mb-4">
+                   <BackButton onClick={prevStep} />
+                </div>
 
-            <div className={`flex-1 overflow-y-auto no-scrollbar pb-32 ${isTransitioning ? 'pointer-events-none' : ''}`}>
-              <div className="mt-32 mb-8">
-                <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
-                <p className="text-white/60 text-lg leading-relaxed font-medium">
-                  Grant OnePoint access to your device hardware to enable autonomous features.
-                </p>
+                <div className="mb-8">
+                  <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
+                  <p className="text-white/60 text-lg leading-relaxed font-medium">
+                    Grant OnePoint access to your device hardware to enable autonomous features.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    { 
+                      id: 'notifications', 
+                      icon: Bell, 
+                      label: 'Notifications', 
+                      desc: 'Critical alerts & approvals', 
+                      active: permissions.notifications,
+                      color: 'text-blue-400',
+                      bg: 'bg-blue-500/20'
+                    },
+                    { 
+                      id: 'location', 
+                      icon: MapPin, 
+                      label: 'Location', 
+                      desc: 'Automated pickups & services', 
+                      active: permissions.location,
+                      color: 'text-green-400',
+                      bg: 'bg-green-500/20'
+                    },
+                    { 
+                      id: 'camera', 
+                      icon: Camera, 
+                      label: 'Camera', 
+                      desc: 'Receipt scanning & vision', 
+                      active: permissions.camera,
+                      color: 'text-red-400',
+                      bg: 'bg-red-500/20'
+                    }
+                  ].map((item: any) => (
+                    <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/20 flex items-center justify-between shadow-lg">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.bg}`}>
+                                <item.icon size={22} className={item.color} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-semibold text-white mb-0.5">{item.label}</h3>
+                                <p className="text-sm text-white/60 font-medium">{item.desc}</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => requestPermission(item.id)}
+                            disabled={item.active}
+                            className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${item.active ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
+                        >
+                            {item.active ? 'Allowed' : 'Allow'}
+                        </button>
+                    </div>
+                  ))}
+
+                  <p className="text-sm text-center text-white/30 pt-4 px-6 font-medium">
+                     You can modify these permissions later in your device settings.
+                  </p>
+                </div>
+
+                <div className="mt-8 pt-4">
+                  <Button onClick={() => finishSetup()} fullWidth variant="primary" icon={Check}>Finish Setup</Button>
+                </div>
               </div>
-
-              <div className="space-y-4">
-                {/* Permissions Cards */}
-                {[
-                  { 
-                    id: 'notifications', 
-                    icon: Bell, 
-                    label: 'Notifications', 
-                    desc: 'Critical alerts & approvals', 
-                    active: permissions.notifications,
-                    color: 'text-blue-400',
-                    bg: 'bg-blue-500/20'
-                  },
-                  { 
-                    id: 'location', 
-                    icon: MapPin, 
-                    label: 'Location', 
-                    desc: 'Automated pickups & services', 
-                    active: permissions.location,
-                    color: 'text-purple-400',
-                    bg: 'bg-purple-500/20'
-                  },
-                  { 
-                    id: 'camera', 
-                    icon: Camera, 
-                    label: 'Camera', 
-                    desc: 'Receipt scanning & vision', 
-                    active: permissions.camera,
-                    color: 'text-orange-400',
-                    bg: 'bg-orange-500/20'
-                  }
-                ].map((item: any) => (
-                  <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/20 flex items-center justify-between shadow-lg">
-                      <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.bg}`}>
-                              <item.icon size={22} className={item.color} />
-                          </div>
-                          <div>
-                              <h3 className="text-xl font-semibold text-white mb-0.5">{item.label}</h3>
-                              <p className="text-sm text-white/60 font-medium">{item.desc}</p>
-                          </div>
-                      </div>
-                      <button 
-                          onClick={() => requestPermission(item.id)}
-                          disabled={item.active}
-                          className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${item.active ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
-                      >
-                          {item.active ? 'Allowed' : 'Allow'}
-                      </button>
-                  </div>
-                ))}
-
-                <p className="text-sm text-center text-white/30 pt-4 px-6 font-medium">
-                   You can modify these permissions later in your device settings.
-                </p>
-              </div>
-            </div>
-
-            <div className="absolute bottom-10 left-6 right-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
-              <Button onClick={() => finishSetup()} fullWidth variant="primary" icon={Check}>Finish Setup</Button>
             </div>
           </div>
         );

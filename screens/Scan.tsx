@@ -66,7 +66,7 @@ export const ScanScreen: React.FC<ScanProps> = ({ onNavigate, onCreateTask }) =>
        </div>
 
        {/* UI Overlays */}
-       <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 pt-12 pb-10">
+       <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 pt-10 pb-10"> {/* Standardized to pt-10 */}
           <div className="flex justify-between items-start">
              <button onClick={() => onNavigate('home')} className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white">
                 <X size={20} />

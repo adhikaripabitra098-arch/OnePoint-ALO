@@ -1,7 +1,7 @@
 {
   "name": "onepoint---the-autonomous-life-os",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,12 +13,18 @@
     "react-dom": "^19.2.3",
     "@google/genai": "^1.33.0",
     "react": "^19.2.3",
-    "@supabase/supabase-js": "2"
+    "@supabase/supabase-js": "2",
+    "idb": "^8.0.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "tailwindcss": "^3.4.1",
+    "postcss": "^8.4.35",
+    "autoprefixer": "^10.4.17"
   }
 }

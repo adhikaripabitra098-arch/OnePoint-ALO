@@ -1,5 +1,46 @@
 import React from 'react';
-import { LucideIcon, ChevronLeft } from 'lucide-react';
+import { LucideIcon, ChevronLeft, X, AlertCircle, CheckCircle } from 'lucide-react';
+
+// --- Global Alert Modal (No more window.alert) ---
+interface AlertProps {
+  isOpen: boolean;
+  type: 'success' | 'error' | 'info';
+  title: string;
+  message: string;
+  onClose: () => void;
+}
+
+export const CustomAlertModal: React.FC<AlertProps> = ({ isOpen, type, title, message, onClose }) => {
+  if (!isOpen) return null;
+  
+  const colors = {
+    success: 'bg-green-500/10 border-green-500/20 text-green-400',
+    error: 'bg-red-500/10 border-red-500/20 text-red-400',
+    info: 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+  };
+  
+  const Icon = type === 'success' ? CheckCircle : type === 'error' ? AlertCircle : AlertCircle;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+       <div className="w-full max-w-xs bg-[#121212] border border-white/10 rounded-3xl p-6 shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${colors[type]}`}>
+             <Icon size={24} />
+          </div>
+          <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+          <p className="text-textMuted text-sm font-medium leading-relaxed mb-6">
+             {message}
+          </p>
+          <button 
+             onClick={onClose}
+             className="w-full h-12 rounded-full bg-white text-black font-bold text-sm hover:bg-gray-200 transition-colors"
+          >
+             Okay
+          </button>
+       </div>
+    </div>
+  );
+};
 
 // --- Card ---
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -43,7 +84,7 @@ export const Button: React.FC<ButtonProps> = ({
   const baseStyles = "h-[56px] rounded-full font-bold text-[16px] flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:active:scale-100 tracking-wide";
   
   const variants = {
-    primary: "bg-white text-black hover:bg-gray-100 shadow-[0_0_20px_rgba(255,255,255,0.15)]", // High contrast
+    primary: "bg-white text-black hover:bg-gray-100 shadow-[0_0_20px_rgba(255,255,255,0.15)]", 
     secondary: "bg-[#252525] text-white hover:bg-[#333]",
     glass: "bg-white/10 backdrop-blur-md border border-white/10 text-white hover:bg-white/20",
     ghost: "bg-transparent text-textMuted hover:text-white"
@@ -60,7 +101,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-// --- Back Button (Revolut Style) ---
+// --- Back Button ---
 export const BackButton: React.FC<{ onClick: () => void; className?: string }> = ({ onClick, className = '' }) => (
   <button 
     onClick={onClick}
@@ -71,7 +112,7 @@ export const BackButton: React.FC<{ onClick: () => void; className?: string }> =
   </button>
 );
 
-// --- Input (Reverted to original visual style) ---
+// --- Input ---
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -110,7 +151,7 @@ export const Input: React.FC<InputProps> = ({ leftIcon, rightIcon, onRightIconCl
 // --- Screen Container ---
 export const Screen: React.FC<{ children: React.ReactNode; className?: string; hidePadding?: boolean }> = ({ children, className = '', hidePadding = false }) => (
   <div className={`min-h-screen text-textMain overflow-hidden relative ${className}`}>
-    <div className={`max-w-md mx-auto min-h-screen relative flex flex-col z-10 ${hidePadding ? '' : 'px-6 pt-safe'}`}>
+    <div className={`max-w-md mx-auto min-h-screen relative flex flex-col z-10 ${hidePadding ? '' : 'px-6 pt-12'}`}>
       {children}
     </div>
   </div>

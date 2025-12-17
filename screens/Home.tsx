@@ -269,7 +269,7 @@ export const HomeScreen: React.FC<HomeProps> = ({ tasks, balance, credits, userN
   return (
     <Screen hidePadding>
       {/* 1. Header Layout */}
-      <div className="flex flex-col px-6 mt-16 mb-6 animate-slide-up relative z-20">
+      <div className="flex flex-col px-6 mt-24 mb-6 animate-slide-up relative z-20"> {/* Standardized to mt-24 (a little up from 28) */}
         
         {/* TOP LINE: Greeting (White) */}
         <h1 className="text-3xl font-bold tracking-tight text-white mb-1">{greeting},</h1>
