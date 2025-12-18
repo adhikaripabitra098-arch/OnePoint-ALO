@@ -599,11 +599,14 @@ export const AuthScreen: React.FC<AuthProps> = ({ initialMode = 'REGISTER', onCo
                   <BackButton onClick={onBack} />
                 </div>
 
-                <div className="mb-6">
-                   <h1 className="text-3xl font-bold mb-2 tracking-tight">{isRegister ? "Create Account" : "Welcome Back"}</h1>
-                   <p className="text-textMuted text-lg font-medium">
-                     {isRegister ? "Start your autonomous journey." : "Your personal autonomy engine awaits."}
-                   </p>
+                <div className="mb-6 relative">
+                    <div className={`absolute -right-2 top-0 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all duration-500 ${password ? 'bg-green-500/10 border-green-500/30 text-green-400 opacity-100' : 'opacity-0'}`}>
+                        <div className="flex items-center gap-1.5"><ShieldCheck size={10}/> Encrypted</div>
+                    </div>
+                    <h1 className="text-3xl font-bold mb-2 tracking-tight">{isRegister ? "Create Account" : "Welcome Back"}</h1>
+                    <p className="text-textMuted text-lg font-medium">
+                        {isRegister ? "Start your autonomous journey." : "Your personal autonomy engine awaits."}
+                    </p>
                 </div>
 
                 <div className="space-y-4 mb-2">
