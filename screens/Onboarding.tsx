@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Screen, Button, BackButton } from '../components/UI';
-import { ArrowRight, Check, Shield, Zap, Lock, Smartphone, Camera, MapPin, Bell } from 'lucide-react';
+import { 
+  ArrowRight, Check, Shield, Zap, Heart, Target, 
+  ShieldAlert, Scale, Camera, MapPin, Bell, Info, Activity
+} from 'lucide-react';
 import { NegotiationStyle, UserPreferences } from '../types';
 import { registerPushNotifications } from '../services/notificationService';
 
@@ -11,8 +14,8 @@ interface OnboardingProps {
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState(0); // 0: Splash, 1: Limits, 2: Negotiation, 3: Permissions
   const [prefs, setPrefs] = useState<UserPreferences>({
-    maxSpendingThreshold: 100,
-    autoApproveUnder: 25,
+    maxSpendingThreshold: 0,
+    autoApproveUnder: 0,
     negotiationStyle: NegotiationStyle.NEUTRAL,
     currency: 'USD'
   });
@@ -24,11 +27,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     camera: false
   });
 
-  // Local state strings to manage input without leading zero issues
-  const [limitInput, setLimitInput] = useState('100');
-  const [approveInput, setApproveInput] = useState('25');
+  // Local state strings to store raw numeric digits.
+  const [limitInput, setLimitInput] = useState('');
+  const [approveInput, setApproveInput] = useState('');
 
-  // Prevent ghost clicks/focus during step transitions
+  const [isShattering, setIsShattering] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
@@ -36,32 +39,73 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         const timer = setTimeout(() => setIsTransitioning(false), 500);
         return () => clearTimeout(timer);
     }
-  }, [step]); 
+  }, [isTransitioning]); 
+
+  const formatWithCommas = (val: string) => {
+    if (!val) return '0';
+    const numeric = val.replace(/[^0-9]/g, '');
+    return Number(numeric).toLocaleString('en-US');
+  };
 
   const handleLimitChange = (val: string) => {
     const numeric = val.replace(/[^0-9]/g, '');
-    const cleaned = numeric.replace(/^0+/, '') || (numeric === '0' ? '0' : '');
+    const cleaned = numeric.replace(/^0+/, ''); 
     setLimitInput(cleaned);
-    setPrefs({ ...prefs, maxSpendingThreshold: Number(cleaned) });
+    setPrefs({ ...prefs, maxSpendingThreshold: Number(cleaned || '0') });
   };
 
   const handleApproveChange = (val: string) => {
     const numeric = val.replace(/[^0-9]/g, '');
-    const cleaned = numeric.replace(/^0+/, '') || (numeric === '0' ? '0' : '');
+    const cleaned = numeric.replace(/^0+/, ''); 
     setApproveInput(cleaned);
-    setPrefs({ ...prefs, autoApproveUnder: Number(cleaned) });
+    setPrefs({ ...prefs, autoApproveUnder: Number(cleaned || '0') });
+  };
+
+  const getAgencyStatus = (valueStr: string, type: 'limit' | 'approve') => {
+    const val = Number(valueStr || '0');
+    const formatted = formatWithCommas(valueStr);
+    
+    if (type === 'limit') {
+      const desc = `Face ID biometric verification required for transactions over $${formatted}`;
+      if (val === 0) return { label: 'INITIALIZING', color: 'text-white/60', bg: 'bg-white/5', accent: 'border-white/10', coverage: 0, segments: 0, desc: 'Set a limit to activate security.' };
+      if (val < 1000) return { label: 'CONTROLLED', color: 'text-blue-400', bg: 'bg-blue-500/10', accent: 'border-blue-500/30', coverage: 15, segments: 2, desc };
+      if (val < 5000) return { label: 'OPTIMIZED', color: 'text-emerald-400', bg: 'bg-emerald-500/10', accent: 'border-emerald-500/30', coverage: 45, segments: 4, desc };
+      if (val < 25000) return { label: 'AUTONOMOUS', color: 'text-indigo-400', bg: 'bg-indigo-500/10', accent: 'border-indigo-500/30', coverage: 82, segments: 7, desc };
+      return { label: 'SOVEREIGN', color: 'text-amber-400', bg: 'bg-amber-500/10', accent: 'border-amber-500/30', coverage: 98, segments: 10, desc };
+    } else {
+      const desc = `Instant execution for transactions up to $${formatted}`;
+      if (val === 0) return { label: 'INITIALIZING', color: 'text-white/60', bg: 'bg-white/5', accent: 'border-white/10', coverage: 0, segments: 0, desc: 'Enable instant agent capability.' };
+      if (val < 200) return { label: 'GUARDED', color: 'text-blue-400', bg: 'bg-blue-500/10', accent: 'border-blue-500/30', coverage: 10, segments: 2, desc };
+      if (val < 1000) return { label: 'OPTIMIZED', color: 'text-emerald-400', bg: 'bg-emerald-500/10', accent: 'border-emerald-500/30', coverage: 35, segments: 5, desc };
+      if (val < 5000) return { label: 'HIGH AGENCY', color: 'text-indigo-400', bg: 'bg-indigo-500/10', accent: 'border-indigo-500/30', coverage: 70, segments: 8, desc };
+      return { label: 'SOVEREIGN', color: 'text-amber-400', bg: 'bg-amber-500/10', accent: 'border-amber-500/30', coverage: 95, segments: 10, desc };
+    }
   };
 
   const nextStep = () => {
-    if (navigator.vibrate) navigator.vibrate(10);
-    setIsTransitioning(true); 
-    setStep(s => s + 1);
+    if (step === 0) {
+      if (navigator.vibrate) navigator.vibrate(5);
+      setIsShattering(true);
+      setTimeout(() => {
+        setStep(1);
+        setIsShattering(false);
+      }, 400);
+    } else {
+      if (navigator.vibrate) navigator.vibrate(10);
+      setIsTransitioning(true); 
+      setStep(s => s + 1);
+    }
   };
 
   const prevStep = () => {
     if (navigator.vibrate) navigator.vibrate(10);
-    setIsTransitioning(true);
-    setStep(s => Math.max(0, s - 1));
+    if (step === 1) {
+      setIsShattering(false);
+      setStep(0);
+    } else {
+      setIsTransitioning(true);
+      setStep(s => Math.max(0, s - 1));
+    }
   };
   
   const finishSetup = (mode: 'LOGIN' | 'REGISTER' = 'REGISTER') => {
@@ -71,323 +115,328 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
   const requestPermission = async (type: 'notifications' | 'location' | 'camera') => {
     if (navigator.vibrate) navigator.vibrate(5);
-    
     try {
       switch (type) {
         case 'notifications':
-          if (!('Notification' in window)) {
-             alert("Notifications are not supported on this device.");
-             return;
-          }
-          try {
-            const notifResult = await Notification.requestPermission();
-            if (notifResult === 'granted') {
-               setPermissions(p => ({...p, notifications: true}));
-               await registerPushNotifications();
-            } else {
-               console.warn("Notifications denied by user.");
-            }
-          } catch (e) {
-            console.warn("Notification request failed", e);
+          const notifResult = await Notification.requestPermission();
+          if (notifResult === 'granted') {
+             setPermissions(p => ({...p, notifications: true}));
+             await registerPushNotifications();
           }
           break;
-          
         case 'location':
-          if (!('geolocation' in navigator)) {
-             alert("Geolocation is not supported.");
-             return;
-          }
           navigator.geolocation.getCurrentPosition(
             () => setPermissions(p => ({...p, location: true})),
-            (err) => {
-              console.warn('Location access denied/failed:', err.message);
-            },
-            { enableHighAccuracy: true, timeout: 60000, maximumAge: 0 }
+            (err) => console.warn('Location denied', err.message)
           );
           break;
-          
         case 'camera':
-           if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-              alert("Camera access requires a secure connection (HTTPS).");
-              return;
-           }
            try {
              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
              setPermissions(p => ({...p, camera: true}));
              stream.getTracks().forEach(t => t.stop());
-           } catch (err: any) {
-             console.warn("Camera access denied or failed:", err);
+           } catch (err) {
+             console.warn("Camera denied", err);
            }
            break;
       }
-    } catch (e: any) {
-       console.error("Permission request system error:", e);
+    } catch (e) {
+       console.error("Permission error:", e);
     }
   };
 
-  // --- Render Content Based on Step ---
-  const renderContent = () => {
+  const renderStepContent = () => {
     switch(step) {
-      case 0:
-        return (
-          // Splash Container - FIXED SCROLLING & SMOOTHNESS
-          <div key="splash" className="fixed inset-0 h-full w-full bg-[#050505] flex flex-col justify-between z-50 pt-16 pb-8 overflow-hidden animate-slide-up will-change-[transform,opacity]">
-            
-            {/* RESTORED BACKGROUND BLOB */}
-            <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
-
-            <div className="flex flex-col items-center mt-12 flex-1 justify-center relative z-10">
-              <div className="p-4 mb-6">
-                <div className="w-24 h-24 relative flex items-center justify-center animate-float">
-                    <div className="absolute inset-0 border-[3px] border-white/20 rounded-full" />
-                    <div className="absolute inset-2 border-[3px] border-white/60 rounded-full" />
-                    <div className="w-5 h-5 bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.9)]" />
-                </div>
-              </div>
-              <h1 className="text-[42px] font-[800] text-center tracking-tighter leading-tight mb-4">
-                <span className="text-white block">OnePoint</span>
-                <span className="text-white/40 text-[28px] font-semibold block mt-1 tracking-normal">Autonomous Life OS</span>
-              </h1>
-            </div>
-
-            <div className="flex flex-col w-full px-5 relative z-10">
-              <div className="w-full space-y-4 mb-10">
-                <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Get Started</Button>
-                
-                <div className="w-full h-[56px] flex items-center justify-center gap-1.5">
-                  <span className="text-sm text-white/60 font-medium">Already have an account?</span>
-                  <button 
-                    onClick={() => finishSetup('LOGIN')}
-                    className="text-sm font-bold text-white hover:text-white/80 transition-colors cursor-pointer underline decoration-white/30 underline-offset-2"
-                  >
-                    Log In
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex justify-center gap-6 pb-2 opacity-40">
-                <div className="flex items-center gap-1.5">
-                  <Lock size={10} className="text-white" />
-                  <span className="text-[9px] tracking-widest text-white uppercase font-bold">AES-256 Encrypted</span>
-                </div>
-                <div className="w-px h-3 bg-white/30" />
-                <div className="flex items-center gap-1.5">
-                  <Smartphone size={10} className="text-white" />
-                  <span className="text-[9px] tracking-widest text-white uppercase font-bold">On-Device AI</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
       case 1:
+        const limitStatus = getAgencyStatus(limitInput, 'limit');
+        const approveStatus = getAgencyStatus(approveInput, 'approve');
+
         return (
-          // Fixed Viewport Layout - Matches Auth Screen
-          // absolute inset-0 ensures full height without nested scrollbars
-          <div key="step1" className="absolute inset-0 z-10">
-            <div className="h-full w-full max-w-md mx-auto flex flex-col">
-              {/* pt-20 px-6 pb-6 matches Auth exactly */}
-              <div className={`flex-1 overflow-y-auto no-scrollbar scroll-smooth pt-20 px-6 pb-6 animate-slide-up will-change-[transform,opacity] ${isTransitioning ? 'pointer-events-none' : ''}`}>
-                
-                <div className="mb-4">
-                   <BackButton onClick={prevStep} />
-                </div>
+          <div className={`flex flex-col animate-slide-up w-full shrink-0 transform-gpu pt-6 pb-0 ${isTransitioning ? 'pointer-events-none' : ''}`}>
+            <div className="shrink-0 mb-4">
+              <BackButton 
+                onClick={prevStep} 
+                className="[&>span]:text-[18px] [&>svg]:w-[29px] [&>svg]:h-[29px]"
+              />
+            </div>
+            
+            <div className="shrink-0 mb-8 px-1">
+              <h1 className="text-4xl font-bold mb-2 tracking-tight">Financial Trust</h1>
+              <p className="text-white/60 text-xl leading-relaxed font-medium">
+                Establish the sovereign perimeter for your Agent's execution.
+              </p>
+            </div>
 
-                <div className="mb-8">
-                  <h1 className="text-3xl font-bold mb-2">Set Your Limits</h1>
-                  <p className="text-white/60 text-lg leading-relaxed font-medium">
-                    Define the autonomy level for your AI agent. You retain full control.
+            <div className="space-y-6">
+              {[
+                { label: 'Security Tier 01', title: 'Verification Limit', input: limitInput, handler: handleLimitChange, status: limitStatus, icon: Shield },
+                { label: 'Security Tier 02', title: 'Auto-approve', input: approveInput, handler: handleApproveChange, status: approveStatus, icon: Zap }
+              ].map((card, idx) => (
+                <div key={idx} className="relative overflow-hidden group p-7 pb-5 rounded-[32px] bg-white/[0.03] border border-white/10 transition-all duration-500 shadow-2xl">
+                  {/* Autonomy Meter */}
+                  <div className="absolute top-0 left-0 right-0 h-1 flex gap-1 px-4 pt-1">
+                    {[...Array(10)].map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={`flex-1 h-full rounded-full transition-all duration-700 ${i < card.status.segments ? (card.status.segments === 10 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'bg-white/80') : 'bg-white/5'}`} 
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mb-5 mt-2">
+                    <div className="flex flex-col">
+                      <div className={`px-4 py-1.5 rounded-full ${card.status.bg} border ${card.status.accent} flex items-center backdrop-blur-sm transition-colors duration-500 inline-flex w-fit`}>
+                        <span className={`text-[10px] font-black tracking-[0.2em] uppercase ${card.status.color}`}>{card.status.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2 ml-1">
+                        <Activity size={10} className="text-white/20" />
+                        <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.1em]">Life Coverage: {card.status.coverage}%</span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest">{card.label}</div>
+                  </div>
+                  
+                  <div className="absolute right-[-10px] top-[10px] p-6 opacity-5 group-focus-within:opacity-10 transition-opacity">
+                    <card.icon size={120} />
+                  </div>
+
+                  <h3 className="font-bold text-2xl mb-1 text-white">{card.title}</h3>
+                  <p className="text-base mb-12 font-medium text-white/60 leading-snug min-h-[56px] flex items-start">
+                    {card.status.desc}
                   </p>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="relative overflow-hidden group p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
-                    <div className="absolute right-0 top-0 p-4 opacity-10 group-focus-within:opacity-20 transition-opacity">
-                      <Shield size={60} />
-                    </div>
-                    <h3 className="font-semibold text-xl mb-1 text-white">Approval Threshold</h3>
-                    <p className="text-sm text-white/60 mb-6 font-medium">Transactions above this require Face ID.</p>
-                    
-                    <div className="relative border-b border-white/20 flex items-center pb-3">
-                      <span className="text-white font-bold text-5xl mr-1">$</span>
-                      <input 
-                        type="tel"
-                        value={limitInput}
-                        onChange={(e) => handleLimitChange(e.target.value)}
-                        placeholder="0"
-                        className="flex-1 bg-transparent text-white text-5xl font-bold outline-none placeholder:text-white/10 min-w-0"
-                        autoComplete="off"
-                        disabled={isTransitioning}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="relative overflow-hidden p-6 rounded-[26px] bg-[#0A0A0A] border border-white/20 shadow-xl">
-                    <div className="absolute right-0 top-0 p-4 opacity-10">
-                      <Zap size={60} />
-                    </div>
-                    <h3 className="font-semibold text-xl mb-1 text-white">Auto-Approve</h3>
-                    <p className="text-sm text-white/60 mb-6 font-medium">Transactions up to this amount are handled instantly.</p>
-                    
-                    <div className="relative border-b border-white/20 flex items-center pb-3">
-                      <span className="text-white font-bold text-5xl mr-1">$</span>
-                      <input 
-                        type="tel"
-                        value={approveInput}
-                        onChange={(e) => handleApproveChange(e.target.value)}
-                        placeholder="0"
-                        className="flex-1 bg-transparent text-white text-5xl font-bold outline-none placeholder:text-white/10 min-w-0"
-                        autoComplete="off"
-                        disabled={isTransitioning}
-                      />
-                    </div>
+                  
+                  <div className="relative border-b border-white/10 flex items-center pb-4 transition-colors focus-within:border-white/40">
+                    <span className={`font-black text-6xl mr-2 transform -translate-y-1.5 transition-colors ${card.status.segments === 10 ? 'text-amber-400' : 'text-white'}`}>$</span>
+                    <input 
+                      type="tel"
+                      value={card.input === '' ? '' : formatWithCommas(card.input)}
+                      onChange={(e) => card.handler(e.target.value)}
+                      placeholder="0"
+                      className={`flex-1 bg-transparent text-6xl font-black outline-none placeholder:text-white/5 min-w-0 tracking-tight transition-colors ${card.status.segments === 10 ? 'text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)]' : 'text-white'}`}
+                      autoComplete="off"
+                      disabled={isTransitioning}
+                    />
                   </div>
                 </div>
-
-                <div className="mt-8">
-                  <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Continue</Button>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         );
 
       case 2:
+        const personaConfig = {
+          [NegotiationStyle.FRIENDLY]: {
+            label: 'COLLABORATIVE',
+            icon: Heart,
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-500/10',
+            accent: 'border-emerald-500/30',
+            desc: 'Polite, relationship-focused, and collaborative.',
+            sample: '"Hi! I noticed a small discrepancy in my bill. Could we look into a refund? Thanks!"'
+          },
+          [NegotiationStyle.NEUTRAL]: {
+            label: 'PROFESSIONAL',
+            icon: Target,
+            color: 'text-blue-400',
+            bg: 'bg-blue-500/10',
+            accent: 'border-blue-500/30',
+            desc: 'Professional, efficient, and balanced approach.',
+            sample: '"Automated system audit identified a $12.50 overcharge. Requesting credit adjustment."'
+          },
+          [NegotiationStyle.FIRM]: {
+            label: 'ASSERTIVE',
+            icon: ShieldAlert,
+            color: 'text-indigo-400',
+            bg: 'bg-indigo-500/10',
+            accent: 'border-indigo-500/30',
+            desc: 'Direct, assertive, and maximum efficiency.',
+            sample: '"My client has been overcharged. I require an immediate correction and credit update."'
+          },
+          [NegotiationStyle.LEGAL]: {
+            label: 'SOVEREIGN',
+            icon: Scale,
+            color: 'text-amber-400',
+            bg: 'bg-amber-500/10',
+            accent: 'border-amber-500/30',
+            desc: 'Formal, cites statutes, and maximum pressure.',
+            sample: '"Under consumer protection statutes, this unauthorized charge is being disputed. Ref: OP-92."'
+          }
+        };
+
         return (
-          // Fixed Viewport Layout - Matches Auth Screen
-          <div key="step2" className="absolute inset-0 z-10">
-            <div className="h-full w-full max-w-md mx-auto flex flex-col">
-              <div className={`flex-1 overflow-y-auto no-scrollbar scroll-smooth pt-20 px-6 pb-6 animate-slide-up will-change-[transform,opacity] ${isTransitioning ? 'pointer-events-none' : ''}`}>
-                 
-                <div className="mb-4">
-                   <BackButton onClick={prevStep} />
-                </div>
+          <div className={`flex flex-col animate-slide-up w-full shrink-0 transform-gpu pt-6 pb-0 ${isTransitioning ? 'pointer-events-none' : ''}`}>
+            <div className="shrink-0 mb-4">
+              <BackButton 
+                onClick={prevStep} 
+                className="[&>span]:text-[18px] [&>svg]:w-[29px] [&>svg]:h-[29px]"
+              />
+            </div>
+            <div className="shrink-0 mb-8 px-1">
+              <h1 className="text-4xl font-bold mb-2 tracking-tight">Agent Persona</h1>
+              <p className="text-white/60 text-xl leading-relaxed font-medium">
+                How should OnePoint communicate on your behalf?
+              </p>
+            </div>
+            
+            <div className="space-y-5">
+              {Object.values(NegotiationStyle).map((style) => {
+                const config = personaConfig[style];
+                const isSelected = prefs.negotiationStyle === style;
+                const Icon = config.icon;
 
-                <div className="mb-6">
-                  <h1 className="text-3xl font-bold mb-2 tracking-tight">Agent Persona</h1>
-                  <p className="text-white/60 text-lg leading-relaxed font-medium">
-                    How should OnePoint communicate with third parties on your behalf?
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {Object.values(NegotiationStyle).map((style) => {
-                    const isSelected = prefs.negotiationStyle === style;
-                    return (
-                      <div 
-                        key={style}
-                        onClick={() => {
-                          if (navigator.vibrate) navigator.vibrate(5);
-                          setPrefs({...prefs, negotiationStyle: style});
-                        }}
-                        className={`group p-6 rounded-[24px] cursor-pointer transition-all duration-300 w-full box-border ${isSelected ? 'bg-white text-black border-2 border-black' : 'bg-[#0A0A0A] border border-white/20 hover:bg-[#1a1a1a] text-white'}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0">
-                            <h3 className="font-bold capitalize text-xl mb-1 whitespace-nowrap">{style.toLowerCase()}</h3>
-                            <p className={`text-sm font-medium truncate ${isSelected ? 'text-gray-600' : 'text-white/60'}`}>
-                              {style === 'FRIENDLY' && 'Polite, collaborative, relationship-focused'}
-                              {style === 'NEUTRAL' && 'Professional, balanced, efficient'}
-                              {style === 'FIRM' && 'Direct, assertive, no-nonsense'}
-                              {style === 'LEGAL' && 'Formal, cites laws, maximum pressure'}
-                            </p>
-                          </div>
-                          {isSelected && (
-                            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0 ml-2">
-                              <Check size={16} className="text-white stroke-[3]" />
-                            </div>
-                          )}
-                        </div>
+                return (
+                  <div 
+                    key={style}
+                    onClick={() => {
+                      if (navigator.vibrate) navigator.vibrate(5);
+                      setPrefs({...prefs, negotiationStyle: style});
+                    }}
+                    className={`relative overflow-hidden group p-6 pb-5 rounded-[32px] cursor-pointer transition-all duration-500 border-2 ${isSelected ? `bg-white text-black border-white shadow-[0_20px_50px_rgba(255,255,255,0.15)]` : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'}`}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`px-4 py-1.5 rounded-full ${isSelected ? 'bg-black/5 border-black/10' : `${config.bg} border ${config.accent}`} flex items-center backdrop-blur-sm transition-colors duration-500`}>
+                        <span className={`text-[10px] font-black tracking-[0.2em] uppercase ${isSelected ? 'text-black' : config.color}`}>{config.label}</span>
                       </div>
-                    );
-                  })}
-                </div>
+                      {isSelected && (
+                        <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center animate-in zoom-in shrink-0">
+                          <Check size={16} className="text-white stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
 
-                <div className="mt-8">
-                  <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight}>Next</Button>
-                </div>
-              </div>
+                    <div className="flex gap-5">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-black/5 text-black' : 'bg-white/5 text-white/40'}`}>
+                        <Icon size={28} strokeWidth={isSelected ? 2.5 : 2} />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className={`font-bold text-2xl mb-1 capitalize ${isSelected ? 'text-black' : 'text-white'}`}>{style.toLowerCase()}</h3>
+                        <p className={`text-base font-medium leading-relaxed ${isSelected ? 'text-black/60 mb-2' : 'text-white/40 mb-0'}`}>
+                          {config.desc}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <div className="mt-1 p-4 pb-3.5 rounded-[20px] bg-black/[0.04] border border-black/5 animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 mb-1.5">
+                           <Info size={12} className="text-black/40" />
+                           <span className="text-[9px] font-black tracking-widest uppercase text-black/40">Communication Protocol</span>
+                        </div>
+                        <p className="text-sm font-bold italic text-black/80 leading-relaxed">
+                          {config.sample}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
 
       case 3:
+        const permissionConfig = [
+          { 
+            id: 'notifications', 
+            icon: Bell, 
+            label: 'Remote Alerts', 
+            desc: 'Critical intervention and approval requests.', 
+            active: permissions.notifications, 
+            color: 'text-blue-400', 
+            bg: 'bg-blue-500/10', 
+            accent: 'border-blue-500/30',
+            protocol: 'P-NOTIF-01'
+          },
+          { 
+            id: 'location', 
+            icon: MapPin, 
+            label: 'Spatial Agency', 
+            desc: 'Geofencing for automated pickups and local services.', 
+            active: permissions.location, 
+            color: 'text-emerald-400', 
+            bg: 'bg-emerald-500/10', 
+            accent: 'border-emerald-500/30',
+            protocol: 'P-SPAT-02'
+          },
+          { 
+            id: 'camera', 
+            icon: Camera, 
+            label: 'Visual Capture', 
+            desc: 'Receipt scanning and visual environment processing.', 
+            active: permissions.camera, 
+            color: 'text-amber-400', 
+            bg: 'bg-amber-500/10', 
+            accent: 'border-amber-500/30',
+            protocol: 'P-VIS-03'
+          }
+        ];
+
         return (
-          // Fixed Viewport Layout - Matches Auth Screen
-          <div key="step3" className="absolute inset-0 z-10">
-            <div className="h-full w-full max-w-md mx-auto flex flex-col">
-              <div className={`flex-1 overflow-y-auto no-scrollbar scroll-smooth pt-20 px-6 pb-6 animate-slide-up will-change-[transform,opacity] ${isTransitioning ? 'pointer-events-none' : ''}`}>
-                
-                <div className="mb-4">
-                   <BackButton onClick={prevStep} />
-                </div>
+          <div className={`flex flex-col animate-slide-up w-full shrink-0 transform-gpu pt-6 pb-0 ${isTransitioning ? 'pointer-events-none' : ''}`}>
+            <div className="shrink-0 mb-4">
+              <BackButton 
+                onClick={prevStep} 
+                className="[&>span]:text-[18px] [&>svg]:w-[29px] [&>svg]:h-[29px]"
+              />
+            </div>
+            
+            <div className="shrink-0 mb-8 px-1">
+              <h1 className="text-4xl font-bold mb-2 tracking-tight">System Access</h1>
+              <p className="text-white/60 text-xl leading-relaxed font-medium">
+                Initialize hardware protocols for full autonomy.
+              </p>
+            </div>
 
-                <div className="mb-8">
-                  <h1 className="text-3xl font-bold mb-2 tracking-tight">System Access</h1>
-                  <p className="text-white/60 text-lg leading-relaxed font-medium">
-                    Grant OnePoint access to your device hardware to enable autonomous features.
-                  </p>
-                </div>
+            <div className="space-y-6 pb-12">
+              {permissionConfig.map((item) => {
+                const Icon = item.icon;
+                const statusLabel = item.active ? 'ACTIVE' : 'OFFLINE';
+                const statusColor = item.active ? item.color : 'text-white/40';
+                const statusBg = item.active ? item.bg : 'bg-white/5';
+                const statusAccent = item.active ? item.accent : 'border-white/10';
 
-                <div className="space-y-4">
-                  {[
-                    { 
-                      id: 'notifications', 
-                      icon: Bell, 
-                      label: 'Notifications', 
-                      desc: 'Critical alerts & approvals', 
-                      active: permissions.notifications,
-                      color: 'text-blue-400',
-                      bg: 'bg-blue-500/20'
-                    },
-                    { 
-                      id: 'location', 
-                      icon: MapPin, 
-                      label: 'Location', 
-                      desc: 'Automated pickups & services', 
-                      active: permissions.location,
-                      color: 'text-green-400',
-                      bg: 'bg-green-500/20'
-                    },
-                    { 
-                      id: 'camera', 
-                      icon: Camera, 
-                      label: 'Camera', 
-                      desc: 'Receipt scanning & vision', 
-                      active: permissions.camera,
-                      color: 'text-red-400',
-                      bg: 'bg-red-500/20'
-                    }
-                  ].map((item: any) => (
-                    <div key={item.id} className="p-5 rounded-[24px] bg-[#0A0A0A] border border-white/20 flex items-center justify-between shadow-lg">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.bg}`}>
-                                <item.icon size={22} className={item.color} />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-semibold text-white mb-0.5">{item.label}</h3>
-                                <p className="text-sm text-white/60 font-medium">{item.desc}</p>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => requestPermission(item.id)}
-                            disabled={item.active}
-                            className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${item.active ? 'bg-green-500/20 text-green-400' : 'bg-white text-black active:scale-95'}`}
-                        >
-                            {item.active ? 'Allowed' : 'Allow'}
-                        </button>
+                return (
+                  <div key={item.id} className="relative overflow-hidden group p-7 pb-6 rounded-[32px] bg-white/[0.03] border border-white/10 transition-all duration-500 shadow-2xl">
+                    <div className="flex items-center justify-between mb-5">
+                      <div className={`px-4 py-1.5 rounded-full ${statusBg} border ${statusAccent} flex items-center backdrop-blur-sm transition-colors duration-500`}>
+                        <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${statusColor}`}>{statusLabel}</span>
+                      </div>
+                      <div className="text-[11px] font-bold text-white/20 uppercase tracking-widest">{item.protocol}</div>
                     </div>
-                  ))}
+                    
+                    <div className="absolute right-[-10px] top-[-10px] p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                      <Icon size={120} />
+                    </div>
 
-                  <p className="text-sm text-center text-white/30 pt-4 px-6 font-medium">
-                     You can modify these permissions later in your device settings.
-                  </p>
-                </div>
+                    <h3 className="font-bold text-2xl mb-1 text-white">{item.label}</h3>
+                    <p className="text-base mb-10 font-medium text-white/60 leading-relaxed min-h-[48px]">
+                      {item.desc}
+                    </p>
 
-                <div className="mt-8 pt-4">
-                  <Button onClick={() => finishSetup()} fullWidth variant="primary" icon={Check}>Finish Setup</Button>
-                </div>
-              </div>
+                    <button 
+                      onClick={() => requestPermission(item.id as any)}
+                      className={`w-full h-[52px] rounded-full font-black text-sm uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-3 ${
+                        item.active 
+                        ? `${item.bg} ${item.color} border ${item.accent} border-opacity-50` 
+                        : 'bg-white text-black active:scale-95 shadow-[0_10px_20px_rgba(255,255,255,0.1)]'
+                      }`}
+                    >
+                      {item.active ? (
+                        <>
+                          <Check size={18} strokeWidth={3} />
+                          Authorized
+                        </>
+                      ) : (
+                        `Initialize ${item.label.split(' ')[0]}`
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+              
+              <p className="text-sm text-center text-white/30 pt-2 px-6 font-medium leading-relaxed italic">
+                 "Hardware handshake required for legal sovereign execution."
+              </p>
             </div>
           </div>
         );
@@ -397,9 +446,67 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     }
   };
 
+  if (step === 0) {
+    const splashAnimationClass = isShattering ? 'animate-shatter' : 'animate-slide-up';
+    return (
+      <div className={`fixed inset-0 h-full w-full bg-[#050505] flex flex-col justify-between z-[100] pt-16 pb-8 overflow-hidden transform-gpu will-change-[transform,opacity,filter] ${splashAnimationClass}`}>
+        <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
+        <div className="flex flex-col items-center flex-1 justify-start pt-32 relative z-10">
+          <div className="p-4 mb-10">
+            <div className="w-32 h-32 relative flex items-center justify-center animate-float transform-gpu">
+                <div className="absolute inset-0 border-[2px] border-white/10 rounded-full" />
+                <div className="absolute inset-4 border-[1px] border-white/25 rounded-full" />
+                <div className="w-8 h-8 bg-white rounded-full shadow-[0_0_60px_rgba(255,255,255,1),0_0_20px_rgba(255,255,255,0.8)]" />
+            </div>
+          </div>
+          <div className="text-center space-y-1">
+            <h1 className="text-[58px] font-[800] text-center tracking-[-0.03em] leading-none mb-1">
+              <span className="text-white">OnePoint</span>
+            </h1>
+            <div className="flex items-center justify-center gap-2 shimmer-text font-bold text-[20px] tracking-[0.25em] uppercase">
+              <span>Autonomous</span>
+              <span>Life OS</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col w-full px-8 relative z-10 space-y-6 mb-16 transform-gpu">
+          <Button onClick={nextStep} fullWidth variant="primary" icon={ArrowRight} className="h-16 text-lg shadow-[0_20px_40px_rgba(255,255,255,0.1)]">
+            Get Started
+          </Button>
+          <div className="text-[16px] font-bold text-white/40 text-center tracking-tight">
+            Already authenticated? <button onClick={() => finishSetup('LOGIN')} className="text-white hover:text-white/80 transition-colors border-b border-white/30 pb-[1.5px] leading-none ml-1">Log In</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Screen hidePadding={false} className="relative">
-      {renderContent()}
+    <Screen hidePadding={true} className="relative bg-[#050505]">
+      <div className="fixed top-0 inset-x-0 h-[500px] bg-gradient-to-b from-[#1E3A8A]/20 to-transparent blur-[80px] pointer-events-none z-0" />
+      <div className="relative z-10 flex flex-col h-full max-h-screen overflow-hidden">
+        <div className="flex-1 overflow-y-auto no-scrollbar pt-14 pb-4 overscroll-contain transform-gpu px-6">
+          <div key={`step-${step}`} className="flex flex-col items-center w-full">
+            {renderStepContent()}
+          </div>
+        </div>
+        <div className="shrink-0 pb-12 pt-6 px-6 bg-gradient-to-t from-[#050505] via-[#050505]/95 to-transparent z-20">
+          <div className="flex justify-center items-center gap-2 mb-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step === i ? 'w-6 bg-white opacity-100' : 'w-1.5 bg-white/20 opacity-50'}`} />
+            ))}
+          </div>
+          <Button 
+            onClick={step < 3 ? nextStep : () => finishSetup()} 
+            fullWidth 
+            variant="primary" 
+            icon={step < 3 ? ArrowRight : Check}
+            className={step === 1 ? 'text-[17px]' : ''}
+          >
+            {step < 3 ? 'Continue' : 'Finish Setup'}
+          </Button>
+        </div>
+      </div>
     </Screen>
   );
 };
